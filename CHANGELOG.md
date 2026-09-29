@@ -1,14 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- When Claude finishes (or needs you) while a question is on screen, the question stays and a prompt
-  offers `Enter` to go back to Claude or `c` to keep going; answering also keeps going. Keeping going
-  keeps new questions coming about the finished change.
-- After answering, press `f` to ask your own follow-up question; Haiku answers using the change, the
-  question and earlier follow-ups as context.
-- Kitty-encoded Esc and Enter are understood in the focus view.
-
 ## 0.1.0
 
 First release.
@@ -22,3 +13,9 @@ First release.
   notification and a "while you were away" recap.
 - `Ctrl-]` switches by hand; `--no-auto` turns auto-switching off.
 - Answers are saved to `~/.hyperfocus/history.jsonl`; `hyperfocus --stats` shows accuracy per project.
+- When Claude finishes (or needs you) while a question is on screen, the question stays and a prompt
+  offers `Enter` to go back to Claude or `c` to keep going; answering also keeps going. Keeping going
+  keeps new questions coming about the finished change.
+- After answering, press `f` to ask your own follow-up question; Haiku answers using the change, the
+  question and earlier follow-ups as context.
+- Kitty-encoded Esc and Enter are understood in the focus view.
