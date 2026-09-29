@@ -2,23 +2,49 @@
   "name": "hyperfocus",
   "version": "0.1.0",
   "description": "Stay in hyperfocus while your coding agent works: a quiz and recap about the change Claude Code is making, right in your terminal",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "agent",
+    "coding-agent",
+    "focus",
+    "productivity",
+    "quiz",
+    "terminal",
+    "cli"
+  ],
+  "homepage": "https://github.com/TEJASVISJAIN/claude-focus#readme",
+  "bugs": {
+    "url": "https://github.com/TEJASVISJAIN/claude-focus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TEJASVISJAIN/claude-focus.git"
+  },
+  "license": "MIT",
+  "author": "Tejasvi S Jain",
   "type": "module",
   "bin": {
     "hyperfocus": "bin/hyperfocus.js"
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
   },
+  "os": [
+    "darwin",
+    "linux"
+  ],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
-  "license": "UNLICENSED",
-  "private": true,
   "dependencies": {
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
