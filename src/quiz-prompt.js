@@ -70,3 +70,28 @@ function isWellFormedQuestion(question) {
 }
 
 const bullets = (items) => items.map((item) => `- ${item}`).join('\n');
+
+export const FOLLOW_UP_SYSTEM_PROMPT =
+  'You answer a developer\'s follow-up question about a quiz question on the change an AI coding agent ' +
+  'is making in their codebase. Answer in 2-4 plain sentences, grounded in the change shown. No markdown, no preamble.';
+
+export function buildFollowUpPrompt(run, { question, chosen, ask, thread }) {
+  const sections = [`The developer asked the agent:\n<request>\n${run?.prompt || '(no prompt captured)'}\n</request>`];
+  if (run?.edits.length) {
+    sections.push(`Changes (- removed, + added):\n${run.edits.map((edit) => `### ${edit.path}\n${edit.diff}`).join('\n\n')}`);
+  }
+  sections.push(
+    [
+      `Quiz question: ${question.q}`,
+      ...question.options.map((option, index) => `${index + 1}) ${option}`),
+      `Correct answer: ${question.answer + 1}) ${question.options[question.answer]}`,
+      `The developer picked: ${chosen === null ? '(skipped)' : `${chosen + 1}) ${question.options[chosen]}`}`,
+      `Explanation shown: ${question.why}`,
+    ].join('\n'),
+  );
+  if (thread.length) {
+    sections.push(`Earlier follow-ups:\n${thread.map((turn) => `Developer: ${turn.ask}\nYou: ${turn.answer}`).join('\n\n')}`);
+  }
+  sections.push(`The developer's follow-up question:\n${ask}`);
+  return sections.join('\n\n');
+}

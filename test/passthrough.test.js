@@ -269,3 +269,24 @@ test('returning while claude is still on its alternate screen repaints it exactl
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });
+
+const fakeClaudeWithQuiz = fileURLToPath(new URL('./fixtures/fake-claude-with-quiz.js', import.meta.url));
+
+test('when Claude finishes mid-question, the quiz stays up and Enter goes back', async () => {
+  const focus = startFocus([], { env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 3500 Stop\r'); // after the 2s typing grace and the first question
+  await focus.waitForScreen(/Why retry refreshToken\?/);
+  await focus.waitForScreen(/Claude finished/);
+  const whileFinished = await focus.userScreen();
+  assert.equal(whileFinished.type, 'alternate', 'still on the quiz');
+  assert.match(whileFinished.text, /Why retry refreshToken\?/);
+  assert.match(whileFinished.text, /Enter\s+back to Claude/);
+
+  focus.terminal.write('\r');
+  await pause(300);
+  assert.equal((await focus.userScreen()).type, 'normal', 'back on Claude');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});

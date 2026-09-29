@@ -331,8 +331,11 @@ stateDiagram-v2
     Waiting --> Focus: 8s elapsed and not typing
     Claude --> Focus: Ctrl-]
     Focus --> Claude: Ctrl-] (suppresses auto-open until the next prompt)
-    Focus --> Recap: done / needs-input, and visible ≥15s or answered ≥1
-    Focus --> Claude: done / needs-input, brief glance
+    Focus --> Finished: done / needs-input while a question is on screen
+    Finished --> Claude: Enter or Ctrl-]
+    Finished --> Focus: c or answering (keep going, questions keep coming)
+    Focus --> Recap: done / needs-input, no question on screen, and visible ≥15s or answered ≥1
+    Focus --> Claude: done / needs-input, no question on screen, brief glance
     Recap --> Claude: any key or Ctrl-]
 ```
 
@@ -345,6 +348,10 @@ stateDiagram-v2
     Asking --> Feedback: 1–4 (answer recorded)
     Asking --> Asking: s (skip, recorded) and more queued
     Asking --> Thinking: s and queue empty
+    Feedback --> Typing: f
+    Typing --> Feedback: Esc
+    Typing --> Answering: Enter (sent to Haiku with the diff and the thread)
+    Answering --> Feedback: answer or failure shown (f asks again)
     Feedback --> Asking: any key, more queued
     Feedback --> Thinking: any key, queue empty (engine asks for more)
     Asking --> Asking: new run (unanswered question carried over)

@@ -184,3 +184,51 @@ test('a new prompt cancels the previous run\'s call instead of waiting for it', 
   assert.match(calls()[1].stdin, /a different task/);
   engine.cancel();
 });
+
+test('after Claude finishes, keeps writing questions only if the user chose to keep going', async () => {
+  const { engine, calls } = setup();
+  engine.update(makeRun({ finished: true }), { queuedQuestions: 0 });
+  await settle();
+  assert.equal(calls().length, 0);
+
+  const batchArrived = once(engine, 'batch');
+  engine.update(makeRun({ finished: true }), { queuedQuestions: 0, keepGoing: true });
+  await batchArrived;
+  assert.equal(calls().length, 1);
+});
+
+const question = { q: 'Why retry refreshToken?', options: ['Rate limits', 'Token expiry races'], answer: 1, why: 'Concurrent requests race.' };
+
+test('answers a follow-up in plain text, with the change, the question and the thread as context', async () => {
+  const { engine, calls } = setup();
+  const answer = await engine.askFollowUp(makeRun(), {
+    question,
+    chosen: 0,
+    ask: 'why not refresh early?',
+    thread: [{ ask: 'is 3 attempts enough?', answer: 'Usually.' }],
+  });
+  assert.equal(answer, 'Because a request can still race the expiry window.');
+  const [call] = calls();
+  assert.match(call.argv[call.argv.indexOf('--system-prompt') + 1], /follow-up/i);
+  assert.match(call.stdin, /why not refresh early\?/);
+  assert.match(call.stdin, /Why retry refreshToken\?/);
+  assert.match(call.stdin, /Token expiry races/, 'the right answer is given');
+  assert.match(call.stdin, /Rate limits/, 'and what the user picked');
+  assert.match(call.stdin, /is 3 attempts enough\?[\s\S]*Usually\./, 'earlier follow-ups are included');
+  assert.match(call.stdin, /\+ return withRetry\(fetchToken\);/, 'the diff is included');
+});
+
+test('a follow-up does not wait behind, or block, question generation', async () => {
+  const { engine, calls } = setup();
+  const batchArrived = once(engine, 'batch');
+  engine.update(makeRun(), { queuedQuestions: 0 });
+  const answer = await engine.askFollowUp(makeRun(), { question, chosen: 1, ask: 'why?', thread: [] });
+  await batchArrived;
+  assert.ok(answer);
+  assert.equal(calls().length, 2);
+});
+
+test('a failed follow-up resolves to null', async () => {
+  const { engine } = setup('error');
+  assert.equal(await engine.askFollowUp(makeRun(), { question, chosen: 1, ask: 'why?', thread: [] }), null);
+});

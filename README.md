@@ -56,6 +56,8 @@ Windows isn't supported yet.
 | `Ctrl-]` | anywhere | switch between Claude and the focus view |
 | `1`–`4` | focus view | answer the question |
 | `s` | focus view | skip the question |
+| `f` | after an answer | ask your own follow-up question; Enter to send, Esc to cancel |
+| `Enter` / `c` | when Claude finishes mid-question | go back to Claude / keep going with the quiz |
 | any key | after an answer or on the recap | continue |
 
 Keys you press in the focus view never reach Claude.
@@ -65,8 +67,12 @@ Keys you press in the focus view never reach Claude.
 - **To the focus view:** after the agent has been busy for 8 seconds, and you haven't typed for 2 seconds.
   Quick replies never interrupt you.
 - **Back to Claude:** the moment Claude finishes, asks for input (a permission prompt, a question) or
-  you interrupt it with Esc. You get a terminal bell and, on macOS, a notification. If you were in the
-  focus view for 15 seconds or more, or answered anything, a "while you were away" card shows first.
+  you interrupt it with Esc. You get a terminal bell and, on macOS, a notification.
+  - **In the middle of a question?** It stays on screen with a prompt: `Enter` goes back to Claude, `c`
+    (or just answering) keeps going. If you keep going, hyperfocus keeps writing questions about the
+    finished change until you go back with `Ctrl-]`.
+  - Otherwise, if you were in the focus view for 15 seconds or more, or answered anything, a "while you
+    were away" card shows first.
 - If you switch back to Claude yourself, hyperfocus stays out of the way until your next prompt.
 
 ## Options
@@ -93,6 +99,9 @@ Keys you press in the focus view never reach Claude.
   and the diffs it wrote, and returns a summary plus multiple-choice questions. That call has no tools,
   no MCP, none of your hooks and no thinking, which keeps it to about 6 seconds and $0.003. It asks again
   on the first change, after every 3 new edits, or when you run out of questions.
+- **Follow-ups.** After an answer, press `f` and ask anything about it ("why not a circuit breaker?").
+  The same lean Haiku call answers in a few sentences, using the diff, the question and your earlier
+  follow-ups as context. It runs beside question generation and never blocks it.
 - **History.** Every answer is appended to `~/.hyperfocus/history.jsonl` for `hyperfocus --stats` (and,
   later, for bringing back the questions you got wrong).
 

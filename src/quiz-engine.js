@@ -1,14 +1,14 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { debugLog } from './debug-log.js';
-import { SYSTEM_PROMPT, buildQuizPrompt, parseQuizReply } from './quiz-prompt.js';
+import { FOLLOW_UP_SYSTEM_PROMPT, SYSTEM_PROMPT, buildFollowUpPrompt, buildQuizPrompt, parseQuizReply } from './quiz-prompt.js';
 
 const NEW_EDITS_BEFORE_REFRESH = 3;
 
 // A lean one-shot Claude: no tools, no MCP, no hooks, no saved session, and our own system prompt.
 // Cutting the default context this way makes each call roughly 70x cheaper. The user's settings
 // files still load, because that is where auth such as apiKeyHelper lives.
-const QUIZ_MODEL_ARGS = [
+const modelArgs = (systemPrompt) => [
   '-p',
   '--model', 'haiku',
   '--output-format', 'json',
@@ -17,7 +17,7 @@ const QUIZ_MODEL_ARGS = [
   '--setting-sources', 'user,project,local',
   '--settings', JSON.stringify({ disableAllHooks: true }),
   '--strict-mcp-config',
-  '--system-prompt', SYSTEM_PROMPT,
+  '--system-prompt', systemPrompt,
 ];
 
 /**
@@ -37,9 +37,10 @@ export function createQuizEngine({ claudePath, env = process.env }) {
   let activityAtLastBatch = -1;
   let lastBatchWasEmpty = false;
   let askedQuestions = [];
+  let keepGoing = false; // the user chose to carry on with the quiz after Claude finished
 
   function shouldGenerate(run, queuedQuestions) {
-    if (inFlight || !run || run.finished) return false;
+    if (inFlight || !run || (run.finished && !keepGoing)) return false;
     const activity = activityOf(run);
     if (!run.prompt && activity === 0) return false;
     // Questions written before anything changed are about the plan; the first real diff deserves fresh ones.
@@ -57,7 +58,7 @@ export function createQuizEngine({ claudePath, env = process.env }) {
 
     let batch = null;
     for (let attempt = 1; attempt <= 2 && !call.cancelled; attempt++) {
-      const reply = await askModel(prompt, call);
+      const reply = await askModel(prompt, call, SYSTEM_PROMPT);
       if (!reply || reply.isError) break;
       batch = parseQuizReply(reply.text);
       if (batch) break;
@@ -72,9 +73,9 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     engine.emit('batch', batch);
   }
 
-  function askModel(prompt, call) {
+  function askModel(prompt, call, systemPrompt) {
     return new Promise((resolve) => {
-      const child = spawn(claudePath, QUIZ_MODEL_ARGS, { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
+      const child = spawn(claudePath, modelArgs(systemPrompt), { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
       call.child = child;
       let stdout = '';
       child.stdout.setEncoding('utf8');
@@ -99,7 +100,8 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     });
   }
 
-  function update(run, { queuedQuestions }) {
+  function update(run, { queuedQuestions, keepGoing: userKeepsGoing = false }) {
+    keepGoing = userKeepsGoing;
     if (run && run.startedAt !== runStartedAt) {
       cancel(); // the previous run's questions are no longer wanted
       runStartedAt = run.startedAt;
@@ -118,7 +120,14 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     inFlight = null;
   }
 
-  return Object.assign(engine, { update, cancel });
+  // Answers the user's own follow-up. Runs beside question generation and never blocks it.
+  async function askFollowUp(run, request) {
+    const reply = await askModel(buildFollowUpPrompt(run, request), { child: null, cancelled: false }, FOLLOW_UP_SYSTEM_PROMPT);
+    if (!reply || reply.isError || !reply.text.trim()) return null;
+    return reply.text.trim();
+  }
+
+  return Object.assign(engine, { update, cancel, askFollowUp });
 }
 
 const activityOf = (run) => run.reads.length + run.edits.length + run.commands.length;

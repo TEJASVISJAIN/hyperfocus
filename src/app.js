@@ -37,6 +37,10 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     redraw: () => screen.redrawFocus(),
     onAnswer: (entry, run) =>
       history.append(entry, { cwd: process.cwd(), sessionId, files: changedFiles(run) }),
+    onBack: () => {
+      session.view.hideFinished();
+      screen.showClaude();
+    },
   });
 
   const screen = createScreen({
@@ -51,6 +55,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
       if (toView === 'focus') openFocus();
       else {
         session.view.hideRecap();
+        session.view.hideFinished();
         screen.showClaude();
       }
     },
@@ -66,6 +71,14 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   // Hand the screen back, first showing what the user missed if they were away for a while.
   const handBack = (reason) => {
     const { score } = session.view;
+    // Rung once the screen shows what the user is being called back to.
+    const alert = () => alertUser(reason === 'done' ? 'Claude finished — back to you' : lastNeedsInputMessage || 'Claude needs you', write);
+    // Mid-question: keep the question and let the user choose to go back or keep going.
+    if (session.view.isAtQuestion) {
+      session.view.showFinished({ reason, changedFiles: changedFiles(session.run), score });
+      screen.redrawFocus();
+      return alert();
+    }
     const recap = buildRecap({
       run: session.run,
       summary: session.view.summary,
@@ -80,7 +93,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     } else {
       screen.showClaude();
     }
-    alertUser(reason === 'done' ? 'Claude finished — back to you' : lastNeedsInputMessage || 'Claude needs you', write);
+    alert();
   };
 
   const policy = createAutoSwitch({

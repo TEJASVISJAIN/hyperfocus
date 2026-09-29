@@ -3,19 +3,32 @@ import { createFocusView } from './focus-view.js';
 import { createQuizEngine } from './quiz-engine.js';
 
 // Connects agent events to the activity log, the quiz engine and the focus view.
-// `redraw` is called whenever what the focus view shows may have changed.
-export function createFocusSession({ claudePath, redraw, onAnswer = undefined }) {
+// `redraw` is called whenever what the focus view shows may have changed; `onBack` when the user
+// asks to go back to Claude from the "Claude finished" prompt.
+export function createFocusSession({ claudePath, redraw, onAnswer = undefined, onBack = undefined }) {
   const log = createActivityLog();
   const engine = createQuizEngine({ claudePath });
+  let keepGoing = false; // chose to carry on with the quiz after Claude finished
   const view = createFocusView({
     onAnswer: (entry) => {
       onAnswer?.(entry, log.run);
       askForMoreIfNeeded();
     },
+    onFollowUp: async (request) => {
+      const answer = await engine.askFollowUp(log.run, request);
+      if (answer) view.setFollowUpAnswer(answer, request.question);
+      else view.setFollowUpFailed(request.question);
+      redraw();
+    },
+    onKeepGoing: () => {
+      keepGoing = true;
+      askForMoreIfNeeded();
+    },
+    onBack: () => onBack?.(),
   });
 
   function askForMoreIfNeeded() {
-    engine.update(log.run, { queuedQuestions: view.queuedQuestions });
+    engine.update(log.run, { queuedQuestions: view.queuedQuestions, keepGoing });
   }
 
   engine.on('batch', (batch) => {
@@ -32,7 +45,10 @@ export function createFocusSession({ claudePath, redraw, onAnswer = undefined })
 
     agentEvent(event) {
       log.record(event);
-      if (event.type === 'busy') view.newRun(log.run.startedAt);
+      if (event.type === 'busy') {
+        keepGoing = false;
+        view.newRun(log.run.startedAt);
+      }
       const label = activityLabel(event);
       if (label) view.setActivity(label, Date.now());
       if (event.type === 'done') engine.cancel();
