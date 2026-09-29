@@ -99,6 +99,7 @@ export function createQuizEngine({ claudePath, env = process.env }) {
 
   function update(run, { queuedQuestions }) {
     if (run && run.startedAt !== runStartedAt) {
+      cancel(); // the previous run's questions are no longer wanted
       runStartedAt = run.startedAt;
       editsAtLastBatch = 0;
       activityAtLastBatch = -1;

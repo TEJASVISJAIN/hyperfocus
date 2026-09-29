@@ -171,3 +171,14 @@ test('the first change refreshes questions written while the agent was only read
   assert.equal(calls().length, 2);
   assert.match(calls()[1].stdin, /withRetry/);
 });
+
+test('a new prompt cancels the previous run\'s call instead of waiting for it', async () => {
+  const { engine, calls } = setup('slow');
+  engine.update(makeRun({ startedAt: 1 }), { queuedQuestions: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  engine.update(makeRun({ startedAt: 2, prompt: 'a different task' }), { queuedQuestions: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(calls().length, 2, 'the new run got its own call straight away');
+  assert.match(calls()[1].stdin, /a different task/);
+  engine.cancel();
+});
