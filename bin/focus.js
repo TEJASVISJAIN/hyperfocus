@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runFocus } from '../src/app.js';
+import { parseFocusArgs } from '../src/cli-args.js';
 import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { runPlain } from '../src/passthrough.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
@@ -13,11 +14,11 @@ if (!claudePath) {
   process.exit(127);
 }
 
-const args = process.argv.slice(2);
+const { claudeArgs, auto } = parseFocusArgs(process.argv.slice(2));
 
 if (process.stdin.isTTY && process.stdout.isTTY) {
   ensureSpawnHelperIsExecutable();
-  await runFocus(claudePath, args);
+  await runFocus(claudePath, claudeArgs, { auto });
 } else {
-  runPlain(claudePath, args);
+  runPlain(claudePath, claudeArgs);
 }

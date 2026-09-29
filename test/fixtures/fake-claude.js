@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { exec } from 'node:child_process';
 // Stand-in for `claude`: reports what it sees so tests can check the wrapper passes things through.
 const report = (event, data) => process.stdout.write(`@@${JSON.stringify({ event, ...data })}@@\r\n`);
 
@@ -28,7 +29,22 @@ process.stdin.on('data', (chunk) => {
     report('line', { line });
     const laterMatch = line.match(/^later (\d+) (.+)$/);
     if (laterMatch) setTimeout(() => report('later', { text: laterMatch[2] }), Number(laterMatch[1]));
+    const hookMatch = line.match(/^hook (\d+) (\w+)$/);
+    if (hookMatch) setTimeout(() => runHook(hookMatch[2]), Number(hookMatch[1]));
     const exitMatch = line.match(/^exit (\d+)$/);
     if (exitMatch) process.exit(Number(exitMatch[1]));
   }
 });
+
+// Runs the hook command focus registered for `eventName`, the way Claude Code would.
+function runHook(eventName) {
+  const command = settings?.hooks[eventName]?.[0]?.hooks[0]?.command;
+  if (!command) return;
+  const payloads = {
+    UserPromptSubmit: { prompt: 'add retry to token refresh' },
+    Stop: {},
+    Notification: { message: 'Claude needs your permission to use Bash' },
+  };
+  const hook = exec(command);
+  hook.stdin.end(JSON.stringify({ hook_event_name: eventName, session_id: 'fake-session', ...payloads[eventName] }));
+}

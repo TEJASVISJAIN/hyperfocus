@@ -12,11 +12,11 @@ const REPORT_TIMEOUT_MS = 5000;
 ensureSpawnHelperIsExecutable();
 
 // Runs `focus` inside an outer pseudo-terminal, standing in for the user's real terminal.
-function startFocus(args = [], { cols = 80, rows = 24 } = {}) {
+function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
   const terminal = pty.spawn(process.execPath, [focusBin, ...args], {
     cols,
     rows,
-    env: { ...process.env, FOCUS_CLAUDE_BIN: fakeClaude },
+    env: { ...process.env, FOCUS_CLAUDE_BIN: fakeClaude, ...env },
   });
   const reports = [];
   const waiters = [];
@@ -168,6 +168,18 @@ test('claude output produced while in the focus view appears after switching bac
   focus.terminal.write(CTRL_RIGHT_BRACKET);
   await focus.waitForScreen(/\x1b\[\?1049l[\s\S]*"later"/);
   assert.equal((await focus.nextReport('later')).text, 'written while away');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('focus opens by itself while the agent works and hands back with a bell when it stops', async () => {
+  const focus = startFocus([], { env: { FOCUS_DELAY_MS: '100' } });
+  await focus.nextReport('start');
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 2600 Stop\r'); // after the 2s typing grace
+  await focus.waitForScreen(/\x1b\[\?1049h/);
+  const screen = await focus.waitForScreen(/\x1b\[\?1049l[\s\S]*\x07/);
+  assert.ok(screen.indexOf(ENTER_ALT_SCREEN) < screen.lastIndexOf('\x1b[?1049l'));
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });
