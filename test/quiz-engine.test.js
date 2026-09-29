@@ -158,3 +158,16 @@ test('a finished run or a run with nothing in it is left alone', async () => {
   await settle();
   assert.equal(calls().length, 0);
 });
+
+test('the first change refreshes questions written while the agent was only reading', async () => {
+  const { engine, calls } = setup();
+  let batchArrived = once(engine, 'batch');
+  engine.update(makeRun({ edits: [] }), { queuedQuestions: 0 });
+  await batchArrived;
+
+  batchArrived = once(engine, 'batch');
+  engine.update(makeRun({ edits: [{ path: 'retry.js', diff: '+ export function withRetry() {}' }] }), { queuedQuestions: 2 });
+  await batchArrived;
+  assert.equal(calls().length, 2);
+  assert.match(calls()[1].stdin, /withRetry/);
+});

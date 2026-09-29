@@ -3,3 +3,4 @@ node_modules/
 *.log
 # local-only planning notes (PRD + issues)
 .scratch/
+*.tgz

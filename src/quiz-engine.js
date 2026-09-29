@@ -40,6 +40,8 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     if (inFlight || !run || run.finished) return false;
     const activity = activityOf(run);
     if (!run.prompt && activity === 0) return false;
+    // Questions written before anything changed are about the plan; the first real diff deserves fresh ones.
+    if (editsAtLastBatch === 0 && run.edits.length > 0) return true;
     if (queuedQuestions > 0) return run.edits.length - editsAtLastBatch >= NEW_EDITS_BEFORE_REFRESH;
     return !(activity === activityAtLastBatch && lastBatchWasEmpty);
   }
