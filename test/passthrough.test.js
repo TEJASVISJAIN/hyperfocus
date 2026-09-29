@@ -212,6 +212,17 @@ test('Ctrl-] works even when it arrives in the same chunk as other keys', async 
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Polls what the user sees until `accept` passes, so timing on a loaded machine can't fail the test.
+async function screenWhen(focus, accept, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let screen = await focus.userScreen();
+  while (!accept(screen) && Date.now() < deadline) {
+    await pause(50);
+    screen = await focus.userScreen();
+  }
+  return screen;
+}
+
 test('a flood of output while away is not replayed byte for byte, but the screen still ends up right', async () => {
   const focus = startFocus();
   await focus.nextReport('start');
@@ -237,14 +248,14 @@ test('if claude leaves its alternate screen while focus is up, the user ends up 
   const focus = startFocus();
   await focus.nextReport('start');
   focus.terminal.write('raw 0 "\\u001b[?1049hCLAUDE FULLSCREEN VIEW"\r');
-  focus.terminal.write('raw 600 "\\u001b[?1049lBACK ON MAIN SCREEN\\r\\n"\r');
-  await pause(200);
-  assert.equal((await focus.userScreen()).type, 'alternate');
+  focus.terminal.write('raw 1200 "\\u001b[?1049lBACK ON MAIN SCREEN\\r\\n"\r');
+  const before = await screenWhen(focus, (screen) => screen.type === 'alternate' && /CLAUDE FULLSCREEN VIEW/.test(screen.text));
+  assert.equal(before.type, 'alternate');
   focus.terminal.write(CTRL_RIGHT_BRACKET);
-  await pause(1000);
+  await screenWhen(focus, (screen) => /hyperfocus ·/.test(screen.text));
+  await pause(1600); // Claude leaves its alternate screen while the focus view is up
   focus.terminal.write(CTRL_RIGHT_BRACKET);
-  await pause(500);
-  const screen = await focus.userScreen();
+  const screen = await screenWhen(focus, (screen) => screen.type === 'normal' && /BACK ON MAIN SCREEN/.test(screen.text));
   assert.equal(screen.type, 'normal', 'the real terminal left the alternate screen too');
   assert.match(screen.text, /BACK ON MAIN SCREEN/);
   assert.doesNotMatch(screen.text, /focus ·/, 'no leftovers of the focus view');
@@ -256,15 +267,16 @@ test('returning while claude is still on its alternate screen repaints it exactl
   const focus = startFocus();
   await focus.nextReport('start');
   focus.terminal.write('raw 0 "\\u001b[?1049h\\u001b[HPAGER LINE ONE\\r\\nPAGER LINE TWO"\r');
-  focus.terminal.write('raw 400 "\\r\\nWRITTEN WHILE AWAY"\r');
-  await pause(200);
+  focus.terminal.write('raw 1200 "\\r\\nWRITTEN WHILE AWAY"\r');
+  await screenWhen(focus, (screen) => screen.type === 'alternate' && /PAGER LINE TWO/.test(screen.text));
   focus.terminal.write(CTRL_RIGHT_BRACKET);
-  await pause(700);
+  await screenWhen(focus, (screen) => /hyperfocus ·/.test(screen.text));
+  await pause(1600); // Claude writes more while the focus view is up
   focus.terminal.write(CTRL_RIGHT_BRACKET);
-  await pause(400);
-  const screen = await focus.userScreen();
+  const screen = await screenWhen(focus, (screen) => /WRITTEN WHILE AWAY/.test(screen.text) && !/hyperfocus ·/.test(screen.text));
   assert.equal(screen.type, 'alternate');
-  assert.match(screen.text, /PAGER LINE ONE\nPAGER LINE TWO\nWRITTEN WHILE AWAY/);
+  // In order; the fake claude's own @@report@@ lines may land in between depending on timing.
+  assert.match(screen.text, /PAGER LINE ONE\nPAGER LINE TWO[\s\S]*WRITTEN WHILE AWAY/);
   assert.doesNotMatch(screen.text, /focus ·/);
   focus.terminal.write('exit 0\r');
   await focus.exited;
