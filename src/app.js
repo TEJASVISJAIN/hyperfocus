@@ -102,6 +102,9 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   // Keeps the elapsed time on the status line moving.
   setInterval(() => screen.redrawFocus(), CLOCK_TICK_MS).unref();
 
+  // However focus exits, never leave the user on the focus screen with the cursor hidden.
+  process.on('exit', () => screen.showClaude());
+
   const restoreTerminal = takeOverTerminal((chunk) => {
     if (screen.view === 'claude') policy.userTyped();
     screen.input(chunk.toString('utf8'));

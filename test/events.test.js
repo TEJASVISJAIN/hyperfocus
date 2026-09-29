@@ -117,3 +117,18 @@ test('the hook exits quietly and quickly when focus is not listening', async () 
   assert.equal(result.stdout + result.stderr, '');
   assert.ok(result.elapsedMs < 1000, `took ${result.elapsedMs}ms`);
 });
+
+test('malformed payloads are ignored and never take focus down', async () => {
+  const malformed = [
+    null,
+    { hook_event_name: 'PostToolUse', session_id: 's', tool_name: 'MultiEdit', tool_input: { file_path: '/a.ts' } },
+    { hook_event_name: 'PostToolUse', session_id: 's', tool_name: 'Bash', tool_input: {} },
+    { hook_event_name: 'PostToolUse', session_id: 's', tool_name: 'Edit', tool_input: { old_string: 'a', new_string: 'b' } },
+    { hook_event_name: 'PreToolUse', session_id: 's', tool_name: 'Read', tool_input: null },
+  ];
+  const received = [];
+  server.events.on('event', (event) => received.push(event));
+  for (const payload of malformed) await runHook(payload, { CLAUDE_FOCUS_SOCK: server.socketPath });
+  assert.deepEqual(await sendAndReceive({ hook_event_name: 'Stop', session_id: 's' }), { type: 'done', sessionId: 's' });
+  assert.deepEqual(received, [{ type: 'done', sessionId: 's' }]);
+});

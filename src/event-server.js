@@ -48,7 +48,12 @@ function handleLine(line, events) {
     debugLog('unparseable hook payload', line.slice(0, 200));
     return;
   }
-  const event = toFocusEvent(payload);
-  debugLog('hook', payload.hook_event_name, payload.tool_name ?? '', event ? event.type : '(ignored)');
-  if (event) events.emit('event', event);
+  try {
+    const event = toFocusEvent(payload);
+    debugLog('hook', payload?.hook_event_name, payload?.tool_name ?? '', event ? event.type : '(ignored)');
+    if (event) events.emit('event', event);
+  } catch (error) {
+    // A bug handling one event must never take down the user's Claude session.
+    debugLog('error handling hook event', error.stack);
+  }
 }
