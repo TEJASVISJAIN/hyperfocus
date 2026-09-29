@@ -85,6 +85,8 @@ Keys you press in the focus view never reach Claude.
 - **History.** Every answer is appended to `~/.focus/history.jsonl` for `focus --stats` (and, later,
   for bringing back the questions you got wrong).
 
+For diagrams, sequences, state machines and design decisions, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Privacy
 
 The quiz model sees what the main agent already sees: your prompt, file paths, and the diffs Claude
