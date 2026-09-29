@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createFocusView } from '../src/focus-view.js';
-import { buildRecap } from '../src/recap.js';
+import { buildRecap, reviewChecklist } from '../src/recap.js';
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
 const screenText = (rendered) => stripAnsi(rendered).split('\r\n').join('\n');
@@ -82,4 +82,35 @@ test('terminal reports (focus in/out, mouse, bracketed paste markers) are not ke
   assert.equal(dismissed, 0);
   view.handleKey('x');
   assert.equal(dismissed, 1);
+});
+
+const missed = (q, file, anchors) => ({ question: { kind: 'why', q, anchor: { file, anchors } } });
+const codeOnDisk = { '/repo/src/retry.ts': 'export async function withRetry(fn, attempts = 3) {\n' };
+const readFile = (path) => {
+  if (!(path in codeOnDisk)) throw new Error('ENOENT');
+  return codeOnDisk[path];
+};
+
+test('the checklist keeps missed questions whose code is still there, and drops discarded ones', () => {
+  const items = reviewChecklist(
+    [
+      missed('Why three attempts?', 'src/retry.ts', ['export async function withRetry(fn, attempts = 3) {']),
+      missed('Why a circuit breaker?', 'src/breaker.ts', ['export class CircuitBreaker extends Base {']),
+      missed('Why three attempts?', 'src/retry.ts', ['export async function withRetry(fn, attempts = 3) {']),
+      missed('What about the plan?', undefined, []),
+    ],
+    { cwd: '/repo', readFile },
+  );
+  assert.deepEqual(items, [{ file: 'src/retry.ts', question: 'Why three attempts?' }]);
+});
+
+test('the recap lists what is worth a look before merging', () => {
+  const view = createFocusView({ onAnswer: () => {} });
+  const checklist = [{ file: 'src/retry.ts', question: 'Why three attempts?' }];
+  const recap = buildRecap({ run, summary: 's', score: { answered: 1, correct: 0 }, visibleMs: 1000, answeredThisVisit: 0, checklist });
+  assert.ok(recap, 'a checklist is always worth showing');
+  view.showRecap(recap, () => {});
+  const screen = screenText(view.render({ cols: 80, rows: 40, now: 0 }));
+  assert.match(screen, /Worth a look before you merge/);
+  assert.match(screen, /src\/retry\.ts\s+Why three attempts\?/);
 });

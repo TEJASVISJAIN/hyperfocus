@@ -3,10 +3,10 @@ import { spawn } from 'node:child_process';
 const BELL = '\x07';
 
 // Pulls the user back: a terminal bell always, plus a macOS notification in case they
-// looked away from the terminal after all.
-export function alertUser(message, write) {
+// looked away from the terminal after all (unless `notifications` is off in the config).
+export function alertUser(message, write, { notify = true } = {}) {
   write(BELL);
-  if (process.platform !== 'darwin') return;
+  if (!notify || process.platform !== 'darwin') return;
   try {
     const child = spawn(
       'osascript',

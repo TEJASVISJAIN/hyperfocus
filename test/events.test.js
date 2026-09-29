@@ -132,3 +132,62 @@ test('malformed payloads are ignored and never take hyperfocus down', async () =
   assert.deepEqual(await sendAndReceive({ hook_event_name: 'Stop', session_id: 's' }), { type: 'done', sessionId: 's' });
   assert.deepEqual(received, [{ type: 'done', sessionId: 's' }]);
 });
+
+test('Claude Code task tools report the plan and its progress', async () => {
+  assert.deepEqual(
+    await sendAndReceive({
+      hook_event_name: 'PostToolUse',
+      session_id: 's',
+      tool_name: 'TaskCreate',
+      tool_input: { subject: 'Write hello', description: 'Write a hello message', activeForm: 'Writing hello' },
+      tool_response: { task: { id: '1', subject: 'Write hello' } },
+    }),
+    { type: 'task-create', sessionId: 's', id: '1', subject: 'Write hello', activeForm: 'Writing hello' },
+  );
+  assert.deepEqual(
+    await sendAndReceive({
+      hook_event_name: 'PostToolUse',
+      session_id: 's',
+      tool_name: 'TaskUpdate',
+      tool_input: { taskId: '1', status: 'in_progress' },
+      tool_response: { success: true, taskId: '1' },
+    }),
+    { type: 'task-update', sessionId: 's', id: '1', status: 'in_progress', subject: null, activeForm: null },
+  );
+});
+
+test('the older TodoWrite tool replaces the whole plan', async () => {
+  assert.deepEqual(
+    await sendAndReceive({
+      hook_event_name: 'PostToolUse',
+      session_id: 's',
+      tool_name: 'TodoWrite',
+      tool_input: { todos: [{ content: 'Write hello', status: 'completed', activeForm: 'Writing hello' }, { content: 'Write bye', status: 'pending' }, 'junk'] },
+    }),
+    {
+      type: 'todos',
+      sessionId: 's',
+      todos: [
+        { subject: 'Write hello', status: 'completed', activeForm: 'Writing hello' },
+        { subject: 'Write bye', status: 'pending', activeForm: 'Write bye' },
+      ],
+    },
+  );
+});
+
+test('subagents report when they start and finish', async () => {
+  for (const toolName of ['Agent', 'Task']) {
+    assert.deepEqual(
+      await sendAndReceive({ hook_event_name: 'PreToolUse', session_id: 's', tool_name: toolName, tool_input: { description: 'Find auth code', prompt: '…' } }),
+      { type: 'subagent', sessionId: 's', description: 'Find auth code' },
+    );
+  }
+  assert.deepEqual(await sendAndReceive({ hook_event_name: 'SubagentStop', session_id: 's' }), { type: 'subagent-done', sessionId: 's' });
+});
+
+test('task payloads missing what hyperfocus needs are ignored', async () => {
+  const { toFocusEvent } = await import('../src/hook-events.js');
+  assert.equal(toFocusEvent({ hook_event_name: 'PostToolUse', tool_name: 'TaskCreate', tool_input: { subject: 'x' } }), null, 'no id');
+  assert.equal(toFocusEvent({ hook_event_name: 'PostToolUse', tool_name: 'TaskUpdate', tool_input: { status: 'completed' } }), null);
+  assert.equal(toFocusEvent({ hook_event_name: 'PostToolUse', tool_name: 'TodoWrite', tool_input: { todos: 'nope' } }), null);
+});

@@ -15,8 +15,9 @@ export function buildHookSettings() {
   return {
     hooks: {
       UserPromptSubmit: [hook()],
-      PreToolUse: [hook('Read|Grep|Glob')],
-      PostToolUse: [hook('Edit|MultiEdit|Write|Bash')],
+      PreToolUse: [hook('Read|Grep|Glob|Agent|Task')],
+      PostToolUse: [hook('Edit|MultiEdit|Write|Bash|TaskCreate|TaskUpdate|TodoWrite')],
+      SubagentStop: [hook()],
       Stop: [hook()],
       Notification: [hook()],
     },

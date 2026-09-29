@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0
+
+- **More kinds of questions:** spot the bug and what-does-it-do questions show real lines from the diff
+  (checked against it), and prediction questions ("which file will Claude edit next?") are settled by
+  Claude's next edit.
+- Answer options are shuffled, and questions get harder or easier with your recent accuracy.
+- The focus view shows Claude's plan from its task list, plus a spinner, streaks and clickable options.
+- `l` opens the live view: a feed of reads, edits, commands and subagents, and a peek at the last lines
+  of Claude's own screen. Hidden by default; `"live": true` in the config starts with it open.
+- **Nothing about discarded changes comes back.** Each question and run remembers the lines its change
+  added; if they are gone from the file, it is left out of everything below.
+- The "while you were away" card lists missed questions worth a look before you merge.
+- `hyperfocus --notes` prints the latest session as markdown for a PR description.
+- `hyperfocus --review` asks again the missed questions whose code is still there.
+- `~/.hyperfocus/config.json` for the delay, model, batch size, question kinds, notifications, mouse,
+  and the live view; `HYPERFOCUS_HOME` moves the data folder.
+- Secrets in diffs and commands are redacted, and files that hold secrets are never read.
+
 ## 0.1.1
 
 - The npm page no longer links to the source repository, which is private for now.

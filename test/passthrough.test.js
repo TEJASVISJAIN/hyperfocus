@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import pty from 'node-pty';
@@ -17,7 +20,8 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
   const terminal = pty.spawn(process.execPath, [focusBin, ...args], {
     cols,
     rows,
-    env: { ...process.env, HYPERFOCUS_CLAUDE_BIN: fakeClaude, ...env },
+    // A throwaway data folder: the user's own config and history must neither affect nor collect test runs.
+    env: { ...process.env, HYPERFOCUS_CLAUDE_BIN: fakeClaude, HYPERFOCUS_HOME: mkdtempSync(join(tmpdir(), 'focus-home-')), ...env },
   });
   const reports = [];
   const waiters = [];
@@ -93,7 +97,7 @@ test('registers hyperfocus hooks with claude without touching the user args', as
   const focus = startFocus(['--continue']);
   const start = await focus.nextReport('start');
   assert.deepEqual(start.args, ['--continue']);
-  assert.deepEqual(start.hookEvents.sort(), ['Notification', 'PostToolUse', 'PreToolUse', 'Stop', 'UserPromptSubmit']);
+  assert.deepEqual(start.hookEvents.sort(), ['Notification', 'PostToolUse', 'PreToolUse', 'Stop', 'SubagentStop', 'UserPromptSubmit']);
   assert.equal(start.hasFocusSocket, true);
   focus.terminal.write('exit 0\r');
   await focus.exited;

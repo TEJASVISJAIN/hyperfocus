@@ -118,6 +118,12 @@ flowchart TB
     bin[bin/hyperfocus.js<br/>entry, flag parsing] --> app[app.js<br/>wiring]
     bin --> passthrough
     bin --> history
+    bin --> config[config.js<br/>~/.hyperfocus/config.json]
+    bin --> notes[notes.js<br/>run log + --notes]
+    bin --> review[review.js<br/>--review screen]
+    review --> view
+    review --> history
+    app --> notes
     app --> passthrough[passthrough.js<br/>PTY + raw TTY]
     app --> screen[screen.js<br/>view switching]
     app --> autoswitch[auto-switch.js<br/>when to switch]
@@ -129,6 +135,12 @@ flowchart TB
     app --> hooksettings[hook-settings.js]
     server --> hookevents[hook-events.js<br/>payload → FocusEvent]
     session --> activity[activity-log.js]
+    activity --> redact[redact.js<br/>secrets out]
+    activity --> anchors[code-anchors.js<br/>still in the code?]
+    engine --> anchors
+    recap --> anchors
+    history --> anchors
+    notes --> anchors
     session --> engine[quiz-engine.js<br/>cadence + subprocess]
     session --> view[focus-view.js<br/>render + keys]
     engine --> prompt[quiz-prompt.js<br/>prompt + parser]
@@ -139,23 +151,28 @@ flowchart TB
 
 | Module | Responsibility | Tested at |
 | --- | --- | --- |
-| `bin/hyperfocus.js` | entry point: `--stats`, finding claude, TTY vs piped mode | CLI tests |
+| `bin/hyperfocus.js` | entry point: `--stats`, `--notes`, `--review`, config problems, finding claude, TTY vs piped mode | CLI tests |
 | `bin/hyperfocus-hook.js` | forward a hook payload to the socket; never print, always exit 0 | `events.test.js` |
 | `src/app.js` | wires everything together; the only module that knows about all the others | end-to-end PTY tests |
 | `src/passthrough.js` | spawn claude in a PTY; raw mode; signals; exit codes; piped fallback | `passthrough.test.js` |
-| `src/screen.js` | which view is on screen; alternate screen; hold back and replay output; key routing | `passthrough.test.js` |
+| `src/screen.js` | which view is on screen; alternate screen; hold back and replay output; key routing; mouse modes; the peek at Claude's screen | `passthrough.test.js`, `screen.test.js` |
 | `src/auto-switch.js` | the switching rules (delay, typing grace, manual override) | `auto-switch.test.js` (fake clock) |
 | `src/event-server.js` + `hook-events.js` | unix socket server; hook payload → `FocusEvent` | `events.test.js` |
 | `src/focus-session.js` | routes events to the log, engine and view; status line labels | via end-to-end tests |
-| `src/activity-log.js` | per-run record of prompt, reads, diffs, commands, with size caps | `activity-log.test.js` |
-| `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; parsing and validating replies | `quiz-engine.test.js` (stub binary) |
-| `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key handling for the quiz and recap | `focus-view.test.js`, `recap.test.js` |
-| `src/history.js` | append answers; aggregate `--stats` | `history.test.js` |
+| `src/activity-log.js` | per-run record of prompt, reads, diffs (with anchors), commands and a timeline, with size caps; Claude's task list | `activity-log.test.js` |
+| `src/redact.js` | hides tokens and secret values; recognises files that hold secrets | `redact.test.js` |
+| `src/code-anchors.js` | a change's anchor lines, and whether they are still in the file | `code-anchors.test.js` |
+| `src/config.js` + `data-dir.js` | `~/.hyperfocus/config.json` with per-setting validation; `HYPERFOCUS_HOME` | `config.test.js` |
+| `src/notes.js` | run log (`runs.jsonl`) and `--notes` | `notes.test.js` |
+| `src/review.js` | the `--review` screen | by hand (see below) |
+| `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; question kinds, grounding and validation; shuffling; difficulty | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
+| `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist | `focus-view*.test.js`, `recap.test.js` |
+| `src/history.js` | append answers; aggregate `--stats`; recent accuracy; missed questions still in the code | `history.test.js` |
 | `src/alert.js`, `debug-log.js`, `cli-args.js`, `claude-binary.js`, `spawn-helper-permissions.js` | small utilities | indirectly |
 
 ### Event vocabulary
 
-Every Claude Code hook payload that hyperfocus cares about becomes one of six events
+Every Claude Code hook payload that hyperfocus cares about becomes one of these events
 (`src/hook-events.js`):
 
 | Hook | Tool matcher | `FocusEvent` |
@@ -164,6 +181,11 @@ Every Claude Code hook payload that hyperfocus cares about becomes one of six ev
 | `PreToolUse` | `Read`, `Grep`, `Glob` | `read { target }` |
 | `PostToolUse` | `Edit`, `MultiEdit`, `Write` | `edit { path, changes[{before, after}] }` |
 | `PostToolUse` | `Bash` | `command { command }` |
+| `PostToolUse` | `TaskCreate` | `task-create { id, subject, activeForm }` (id from the tool response) |
+| `PostToolUse` | `TaskUpdate` | `task-update { id, status, subject, activeForm }` |
+| `PostToolUse` | `TodoWrite` (older Claude Code) | `todos { todos[] }`, replacing the plan |
+| `PreToolUse` | `Agent`, `Task` | `subagent { description }` |
+| `SubagentStop` | | `subagent-done` (ignored as activity: Claude Code's prompt-suggestion agent stops after `Stop`) |
 | `Stop` | | `done` |
 | `Notification` | | `needs-input { message }` |
 
@@ -352,6 +374,9 @@ stateDiagram-v2
     Typing --> Feedback: Esc
     Typing --> Answering: Enter (sent to Haiku with the diff and the thread)
     Answering --> Feedback: answer or failure shown (f asks again)
+    Asking --> Locked: 1–4 on a prediction
+    Locked --> Asking: any key (the prediction waits for Claude's next edit)
+    Asking --> Asking: l (live view shown or hidden)
     Feedback --> Asking: any key, more queued
     Feedback --> Thinking: any key, queue empty (engine asks for more)
     Asking --> Asking: new run (unanswered question carried over)
@@ -368,28 +393,49 @@ classDiagram
         string[] reads
         Edit[] edits
         string[] commands
+        Step[] timeline  "latest 30, for the live feed"
     }
     class Edit {
         string path  "relative to project"
-        string diff  "- removed / + added lines"
+        string diff  "- removed / + added lines, secrets redacted"
+        string[] anchors  "distinctive added lines"
     }
     class Batch {
         string summary
         Question[] questions
     }
     class Question {
+        string kind  "why, bug, output, predict"
         string q
-        string[] options  "2-4"
-        int answer  "0-based"
+        string[] options  "2-4, shuffled"
+        int answer  "0-based, null for predict"
         string why
+        string code  "excerpt, verified against the diff"
+        Anchor anchor
+    }
+    class Anchor {
+        string file
+        string[] anchors
+    }
+    class RunLogEntry {
+        string cwd
+        string sessionId
+        string prompt
+        string summary
+        FileAnchors[] files
     }
     class HistoryEntry {
         string ts
         string cwd
         string sessionId
+        string source  "live or review"
+        string kind
         string question
         string[] options
         int answer
+        string why
+        string code
+        Anchor anchor
         int chosen
         bool correct
         bool skipped
@@ -398,11 +444,38 @@ classDiagram
     Run "1" *-- "many" Edit
     Batch "1" *-- "1..3" Question
     Question ..> HistoryEntry : answered or skipped
+    Question *-- Anchor
+    HistoryEntry *-- Anchor
+    Run ..> RunLogEntry : when it ends
 ```
 
 Size limits keep the quiz call small and cheap: a diff is capped at 4KB per edit and 20KB per
 run, and the **oldest** diffs are dropped first. Every edited file stays listed, with its diff
 replaced by `(older change omitted)`.
+
+## Is it still in the code?
+
+The user can steer Claude from change X to change Y halfway through. Questions about X, and notes
+about X, then describe code that no longer exists. hyperfocus never asks git or guesses intent; it
+checks the code itself:
+
+```mermaid
+flowchart LR
+    diff[edit diff] --> anchors[anchor lines:<br/>distinctive added lines,<br/>12+ chars, not redacted]
+    anchors --> question[question anchor:<br/>quoted lines, else the file's<br/>added lines, else latest edit]
+    anchors --> runlog[run log:<br/>anchors per file]
+    question --> check{at least half of the<br/>anchor lines still lines<br/>of the file on disk?}
+    runlog --> check
+    check -- yes --> keep[review / checklist / notes]
+    check -- no --> drop[left out: reverted,<br/>rewritten or deleted]
+```
+
+- Questions asked before any edit have no anchor, and old history entries don't either: neither is
+  ever brought back, because neither can be checked.
+- Used by the end-of-run "worth a look before you merge" checklist, `hyperfocus --review` (latest
+  attempt wrong, still in the code) and `hyperfocus --notes` (files and runs whose changes are gone are
+  left out, and the notes say how many).
+- Whitespace changes don't matter (lines are compared trimmed); a moved line still counts.
 
 ## Terminal handling
 
@@ -416,6 +489,9 @@ replaced by `(older change omitted)`.
 - **Ctrl-] detection** accepts `0x1d`, kitty (`CSI 93;5u`) and modifyOtherKeys (`CSI 27;5;93~`),
   because Claude Code turns on enhanced keyboard modes. The key is found anywhere in an input chunk,
   since fast typing and pastes merge keys into one chunk.
+- **Mouse (`?1000` + `?1006`)** is turned on only while the focus view is up, and Claude's own mouse
+  modes, tracked from its output, are restored on the way back. Clicks act only on option rows, since
+  the click that focuses the terminal window arrives too.
 - **Synchronized output (`?2026`)** wraps every focus frame, so terminals that support it don't flicker
   on the 1-second clock redraw.
 - **Piped mode:** if stdin or stdout isn't a TTY, hyperfocus runs `claude` with inherited stdio and does
@@ -437,7 +513,10 @@ replaced by `(older change omitted)`.
 | quiz model API error | no retry; the view keeps showing the summary and "Thinking of a question…" |
 | model returns some malformed questions | those questions are dropped, the rest are kept |
 | agent finishes mid-call | the call is killed and its result ignored |
-| history file can't be written | logged with `HYPERFOCUS_DEBUG=1`; the session carries on |
+| history or run log can't be written | logged with `HYPERFOCUS_DEBUG=1`; the session carries on |
+| bad value in `config.json` | printed once at startup; that setting falls back to its default |
+| the model quotes code that isn't in the diff | the excerpt is dropped; a "bug" or "output" question without one is dropped |
+| a diff or command contains a secret | token formats and secret-looking assignments are replaced with `[redacted]` before storing, showing or sending; `.env`, keys and similar files never have their contents read |
 | hyperfocus-spawned `claude -p` would trigger hooks | `HYPERFOCUS_CHILD=1` makes our hook a no-op, and `disableAllHooks` stops the user's hooks while their settings (and auth) still load |
 
 ## Testing strategy
@@ -450,13 +529,17 @@ Tests sit at seven agreed seams, all behind public interfaces:
    argv, env and stdin.
 4. **Auto-switch policy:** with `node:test` mock timers.
 5. **Focus view and recap:** rendering as a function of state and size, plus key handling.
-6. **History and `--stats`:** including the CLI with a temporary `HOME`.
+6. **History, `--stats`, `--notes` and the still-in-the-code check:** against temporary files and a
+   stub file reader.
 7. **End to end in a PTY:** `hyperfocus` runs inside an outer pseudo-terminal against
    `test/fixtures/fake-claude.js`, which reports what it receives and can run the injected hook
    commands the way Claude Code would.
 
 On top of that, hyperfocus was run against real Claude Code 2.1.285 in a throwaway project: auto-open,
-a generated question, an answer, two real `Write` hooks, `Stop`, the recap and an intact return.
+a generated question, an answer, two real `Write` hooks, `Stop`, the recap and an intact return. For
+0.2.0 it was run again: Claude's `TaskCreate`/`TaskUpdate` plan, the live feed, the peek, the finish
+prompt, the run log and `--notes` with a reverted file; `--review` was run in a PTY against seeded
+history with one kept and one discarded question.
 
 ## Design decisions
 
@@ -468,6 +551,10 @@ a generated question, an answer, two real `Write` hooks, `Stop`, the recap and a
 | Screen switching | alternate screen + byte replay | always repainting from the mirror (drifts from Claude's own screen model) |
 | Question model | `claude -p --model haiku`, lean flags, no thinking, user settings kept for auth | Anthropic SDK (needs an API key the user may not have); default flags (~21k context tokens, ~30s with thinking) |
 | When to ask again | first diff, every 3 edits, or when the queue is empty | one call per event (cost, noise) |
+| Filling the wait for the first batch | nothing old: the live view (feed and peek), one key away | replaying old missed questions (they may be about a change the user has since abandoned) |
+| Live view on screen | hidden by default, `l` toggles, `"live": true` to start open | always on (noise under every question) |
+| Telling kept changes from discarded ones | anchor lines checked against the file on disk | git history (not every project, uncommitted work); asking the user |
+| Answer position | shuffled locally | trusting the model (it favours one slot) |
 | Language | plain Node ESM, JSDoc types checked by `tsc` | TypeScript build step (slower hook startup, more tooling) |
 
 ## Known limitations

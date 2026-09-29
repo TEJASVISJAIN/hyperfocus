@@ -142,3 +142,23 @@ test('interrupt keys are recognised in every encoding Claude Code may turn on', 
   for (const key of ['\x1b', '\x03', '\x1b[27u', '\x1b[99;5u', '\x1b[27;5;99~']) assert.equal(isInterruptKey(key), true, JSON.stringify(key));
   for (const key of ['a', '\x1b[A', '\r', '\x1b[I']) assert.equal(isInterruptKey(key), false, JSON.stringify(key));
 });
+
+test('a subagent starting after a permission prompt counts as busy again', () => {
+  const { policy, calls } = setup();
+  policy.agentEvent(busy);
+  mock.timers.tick(8000);
+  policy.agentEvent({ type: 'needs-input', sessionId: 's', message: 'allow?' });
+  policy.agentEvent({ type: 'subagent', sessionId: 's', description: 'Find callers' });
+  mock.timers.tick(8000);
+  assert.deepEqual(calls, ['open focus', 'return: needs-input', 'open focus']);
+});
+
+test("a subagent finishing after Claude's Stop does not bring the focus view back", () => {
+  const { policy, calls } = setup();
+  policy.agentEvent(busy);
+  mock.timers.tick(8000);
+  policy.agentEvent(done);
+  policy.agentEvent({ type: 'subagent-done', sessionId: 's' });
+  mock.timers.tick(20_000);
+  assert.deepEqual(calls, ['open focus', 'return: done']);
+});

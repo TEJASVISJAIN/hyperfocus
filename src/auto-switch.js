@@ -1,3 +1,6 @@
+// Not 'subagent-done': Claude Code's prompt-suggestion agent finishes after Stop, when nothing is running.
+const AGENT_STEPS = new Set(['read', 'edit', 'command', 'subagent']);
+
 /**
  * Decides when hyperfocus takes over the screen and when it hands it back.
  *
@@ -33,7 +36,7 @@ export function createAutoSwitch({ delayMs, typingGraceMs, auto = true, currentV
         if (auto) schedule(delayMs);
         return;
       }
-      if (event.type === 'read' || event.type === 'edit' || event.type === 'command') {
+      if (AGENT_STEPS.has(event.type)) {
         // Claude carries on after a permission prompt without a new prompt event.
         if (agentBusy) return;
         agentBusy = true;

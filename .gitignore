@@ -4,3 +4,4 @@ node_modules/
 # local-only planning notes (PRD + issues)
 .scratch/
 *.tgz
+.claude/scheduled_tasks.lock

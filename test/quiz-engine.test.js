@@ -9,11 +9,16 @@ import { createQuizEngine } from '../src/quiz-engine.js';
 
 const fakeHaiku = fileURLToPath(new URL('./fixtures/fake-haiku.js', import.meta.url));
 
-function setup(mode = 'fenced') {
+// A random source that makes the shuffle keep every option where it is.
+const keepOrder = () => 0.999999;
+
+function setup(mode = 'fenced', options = {}) {
   const logPath = join(mkdtempSync(join(tmpdir(), 'focus-engine-')), 'calls.jsonl');
   const engine = createQuizEngine({
     claudePath: fakeHaiku,
     env: { ...process.env, FAKE_HAIKU_MODE: mode, FAKE_HAIKU_LOG: logPath, HYPERFOCUS_SOCK: '/tmp/parent.sock' },
+    random: keepOrder,
+    ...options,
   });
   const calls = () => (existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
   return { engine, calls };
@@ -25,8 +30,9 @@ function makeRun(overrides = {}) {
     startedAt: 1,
     finished: false,
     reads: ['src/auth.ts'],
-    edits: [{ path: 'src/auth.ts', diff: '- return fetchToken();\n+ return withRetry(fetchToken);' }],
+    edits: [{ path: 'src/auth.ts', diff: '- return fetchToken();\n+ return withRetry(fetchToken);', anchors: ['return withRetry(fetchToken);'] }],
     commands: [],
+    timeline: [],
     ...overrides,
   };
 }
@@ -42,10 +48,12 @@ test('turns the current run into a summary and multiple-choice questions', async
   assert.equal(batch.summary, 'Claude is wrapping refreshToken() in a retry helper.');
   assert.equal(batch.questions.length, 2);
   assert.deepEqual(batch.questions[0], {
+    kind: 'why',
     q: 'Why retry refreshToken?',
     options: ['Rate limits', 'Token expiry races', 'Caching'],
     answer: 1,
     why: 'Concurrent requests can race.',
+    anchor: { file: 'src/auth.ts', anchors: ['return withRetry(fetchToken);'] },
   });
 
   const [call] = calls();
@@ -231,4 +239,33 @@ test('a follow-up does not wait behind, or block, question generation', async ()
 test('a failed follow-up resolves to null', async () => {
   const { engine } = setup('error');
   assert.equal(await engine.askFollowUp(makeRun(), { question, chosen: 1, ask: 'why?', thread: [] }), null);
+});
+
+test('options arrive shuffled, with the answer still pointing at the right one', async () => {
+  const { engine } = setup('fenced', { random: () => 0 });
+  const batchArrived = once(engine, 'batch');
+  engine.update(makeRun(), { queuedQuestions: 0 });
+  const [{ questions }] = await batchArrived;
+  assert.notDeepEqual(questions[0].options, ['Rate limits', 'Token expiry races', 'Caching']);
+  assert.equal(questions[0].options[questions[0].answer], 'Token expiry races');
+});
+
+test('uses the configured model, kinds and batch size', async () => {
+  const { engine, calls } = setup('fenced', { model: 'sonnet', kinds: ['why', 'bug'], questionsPerBatch: 2 });
+  const batchArrived = once(engine, 'batch');
+  engine.update(makeRun(), { queuedQuestions: 0 });
+  await batchArrived;
+  const [call] = calls();
+  assert.equal(call.argv[call.argv.indexOf('--model') + 1], 'sonnet');
+  assert.match(call.stdin, /1-2 questions/);
+  assert.match(call.stdin, /"bug"/);
+  assert.doesNotMatch(call.stdin, /"predict"/);
+});
+
+test('asks for harder questions when the developer keeps getting them right', async () => {
+  const { engine, calls } = setup('fenced', { accuracy: () => ({ answered: 12, correct: 11 }) });
+  const batchArrived = once(engine, 'batch');
+  engine.update(makeRun(), { queuedQuestions: 0 });
+  await batchArrived;
+  assert.match(calls()[0].stdin, /harder/);
 });

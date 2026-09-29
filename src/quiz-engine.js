@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { debugLog } from './debug-log.js';
-import { FOLLOW_UP_SYSTEM_PROMPT, SYSTEM_PROMPT, buildFollowUpPrompt, buildQuizPrompt, parseQuizReply } from './quiz-prompt.js';
+import { anchorFor } from './code-anchors.js';
+import { DEFAULT_CONFIG } from './config.js';
+import { FOLLOW_UP_SYSTEM_PROMPT, SYSTEM_PROMPT, buildFollowUpPrompt, buildQuizPrompt, parseQuizReply, shuffleOptions } from './quiz-prompt.js';
 
 const NEW_EDITS_BEFORE_REFRESH = 3;
 
 // A lean one-shot Claude: no tools, no MCP, no hooks, no saved session, and our own system prompt.
 // Cutting the default context this way makes each call roughly 70x cheaper. The user's settings
 // files still load, because that is where auth such as apiKeyHelper lives.
-const modelArgs = (systemPrompt) => [
+const modelArgs = (systemPrompt, model) => [
   '-p',
-  '--model', 'haiku',
+  '--model', model,
   '--output-format', 'json',
   '--tools', '',
   '--no-session-persistence',
@@ -23,8 +25,18 @@ const modelArgs = (systemPrompt) => [
 /**
  * Turns the current run into question batches by asking a small model, and decides when it
  * is worth asking again. Emits 'batch' with { summary, questions }.
+ *
+ * `accuracy()` reports how the developer has been doing, so the questions can get harder or easier.
  */
-export function createQuizEngine({ claudePath, env = process.env }) {
+export function createQuizEngine({
+  claudePath,
+  env = process.env,
+  model = DEFAULT_CONFIG.model,
+  kinds = DEFAULT_CONFIG.kinds,
+  questionsPerBatch = DEFAULT_CONFIG.questionsPerBatch,
+  accuracy = () => undefined,
+  random = Math.random,
+}) {
   const engine = new EventEmitter();
   /** @type {NodeJS.ProcessEnv} */
   // Haiku thinks for ~3k tokens by default here, which turned a 6s batch into 30s.
@@ -54,13 +66,13 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     inFlight = call;
     editsAtLastBatch = run.edits.length;
     activityAtLastBatch = activityOf(run);
-    const prompt = buildQuizPrompt(run, askedQuestions);
+    const prompt = buildQuizPrompt(run, askedQuestions, { kinds, count: questionsPerBatch, accuracy: accuracy() });
 
     let batch = null;
     for (let attempt = 1; attempt <= 2 && !call.cancelled; attempt++) {
       const reply = await askModel(prompt, call, SYSTEM_PROMPT);
       if (!reply || reply.isError) break;
-      batch = parseQuizReply(reply.text);
+      batch = parseQuizReply(reply.text, { run, kinds });
       if (batch) break;
       debugLog('quiz reply was not valid JSON, attempt', attempt);
     }
@@ -70,12 +82,16 @@ export function createQuizEngine({ claudePath, env = process.env }) {
     lastBatchWasEmpty = !batch || batch.questions.length === 0;
     if (!batch) return;
     askedQuestions.push(...batch.questions.map((question) => question.q));
-    engine.emit('batch', batch);
+    const questions = batch.questions.map((question) => {
+      const anchor = anchorFor(question, run);
+      return { ...shuffleOptions(question, random), ...(anchor ? { anchor } : {}) };
+    });
+    engine.emit('batch', { summary: batch.summary, questions });
   }
 
   function askModel(prompt, call, systemPrompt) {
     return new Promise((resolve) => {
-      const child = spawn(claudePath, modelArgs(systemPrompt), { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
+      const child = spawn(claudePath, modelArgs(systemPrompt, model), { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
       call.child = child;
       let stdout = '';
       child.stdout.setEncoding('utf8');

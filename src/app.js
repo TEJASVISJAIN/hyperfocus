@@ -1,20 +1,21 @@
 import { alertUser } from './alert.js';
 import { changedFiles } from './activity-log.js';
 import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
-import { focusDelayMs } from './cli-args.js';
 import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
 import { buildHookSettings } from './hook-settings.js';
-import { createHistory } from './history.js';
+import { createHistory, recentAccuracy } from './history.js';
+import { createRunLog } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
-import { buildRecap } from './recap.js';
-import { createScreen } from './screen.js';
+import { buildRecap, reviewChecklist } from './recap.js';
+import { createScreen, peekLines } from './screen.js';
 
 const TYPING_GRACE_MS = 2000;
 const CLOCK_TICK_MS = 1000;
+const PEEK_LINES = 4;
 
-export async function runFocus(claudePath, claudeArgs, { auto }) {
+export async function runFocus(claudePath, claudeArgs, { auto, config }) {
   const { stdout } = process;
   const eventServer = await startEventServer();
   const write = (data) => stdout.write(data);
@@ -30,16 +31,20 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     },
   });
 
+  const cwd = process.cwd();
   const history = createHistory();
+  const runLog = createRunLog();
+  const loggedRuns = new WeakSet();
   let sessionId = null;
   const session = createFocusSession({
     claudePath,
+    config,
+    projectAccuracy: recentAccuracy({ cwd }),
     redraw: () => screen.redrawFocus(),
-    onAnswer: (entry, run) =>
-      history.append(entry, { cwd: process.cwd(), sessionId, files: changedFiles(run) }),
+    onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run) }),
     onBack: () => {
       session.view.hideFinished();
-      screen.showClaude();
+      showRecapOrClaude('done');
     },
   });
 
@@ -48,7 +53,14 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     claude: child,
     cols: stdout.columns || 80,
     rows: stdout.rows || 24,
-    focusView: { render: (size) => session.view.render(size), handleKey: (key) => session.handleKey(key) },
+    mouse: config.mouse,
+    focusView: {
+      render: (size) => {
+        if (session.view.liveShown) session.view.setPeek(peekLines(screen.claudeScreenLines(), PEEK_LINES));
+        return session.view.render(size);
+      },
+      handleKey: (key) => session.handleKey(key),
+    },
     onToggleKey: () => {
       const toView = screen.view === 'claude' ? 'focus' : 'claude';
       policy.manualToggle(toView);
@@ -68,17 +80,9 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     screen.showFocus();
   };
 
-  // Hand the screen back, first showing what the user missed if they were away for a while.
-  const handBack = (reason) => {
+  // The "while you were away" card, when there is something worth showing; otherwise straight back.
+  const showRecapOrClaude = (reason) => {
     const { score } = session.view;
-    // Rung once the screen shows what the user is being called back to.
-    const alert = () => alertUser(reason === 'done' ? 'Claude finished — back to you' : lastNeedsInputMessage || 'Claude needs you', write);
-    // Mid-question: keep the question and let the user choose to go back or keep going.
-    if (session.view.isAtQuestion) {
-      session.view.showFinished({ reason, changedFiles: changedFiles(session.run), score });
-      screen.redrawFocus();
-      return alert();
-    }
     const recap = buildRecap({
       run: session.run,
       summary: session.view.summary,
@@ -86,6 +90,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
       visibleMs: Date.now() - visit.openedAt,
       answeredThisVisit: score.answered - visit.answeredBefore,
       reason,
+      checklist: reviewChecklist(session.missedThisRun, { cwd }),
     });
     if (recap) {
       session.view.showRecap(recap, () => screen.showClaude());
@@ -93,11 +98,35 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     } else {
       screen.showClaude();
     }
+  };
+
+  // Hand the screen back, first showing what the user missed if they were away for a while.
+  const handBack = (reason) => {
+    // Rung once the screen shows what the user is being called back to.
+    const alert = () =>
+      alertUser(reason === 'done' ? 'Claude finished — back to you' : lastNeedsInputMessage || 'Claude needs you', write, {
+        notify: config.notifications,
+      });
+    // Mid-question: keep the question and let the user choose to go back or keep going.
+    if (session.view.isAtQuestion) {
+      session.view.showFinished({ reason, changedFiles: changedFiles(session.run), score: session.view.score });
+      screen.redrawFocus();
+      return alert();
+    }
+    showRecapOrClaude(reason);
     alert();
   };
 
+  // Each run once, when it ends, for `hyperfocus --notes`.
+  const logRun = () => {
+    const { run } = session;
+    if (!run || !run.finished || loggedRuns.has(run)) return;
+    loggedRuns.add(run);
+    runLog.append(run, { cwd, sessionId, summary: session.view.summary });
+  };
+
   const policy = createAutoSwitch({
-    delayMs: focusDelayMs(),
+    delayMs: config.delayMs,
     typingGraceMs: TYPING_GRACE_MS,
     auto,
     currentView: () => screen.view,
@@ -110,6 +139,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     sessionId = event.sessionId ?? sessionId;
     if (event.type === 'needs-input') lastNeedsInputMessage = event.message;
     session.agentEvent(event);
+    if (event.type === 'done') logRun();
     policy.agentEvent(event);
   });
 
@@ -126,6 +156,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
       if (isInterruptKey(key)) {
         policy.userInterrupted();
         session.userInterrupted();
+        logRun();
       }
     }
     screen.input(key);
