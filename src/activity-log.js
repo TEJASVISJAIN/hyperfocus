@@ -19,6 +19,9 @@ export function relativeToProject(path, cwd = process.cwd()) {
   return fromCwd.startsWith('..') ? path : fromCwd;
 }
 
+// Each file the run edited, once, in the order first edited.
+export const changedFiles = (run) => [...new Set((run?.edits ?? []).map((edit) => edit.path))];
+
 // What the agent has done since the user's last prompt — the raw material for questions and recaps.
 export function createActivityLog({ cwd = process.cwd() } = {}) {
   /** @type {Run | null} */

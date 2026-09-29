@@ -1,4 +1,5 @@
 import { alertUser } from './alert.js';
+import { changedFiles } from './activity-log.js';
 import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
 import { focusDelayMs } from './cli-args.js';
 import { debugLog } from './debug-log.js';
@@ -35,7 +36,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     claudePath,
     redraw: () => screen.redrawFocus(),
     onAnswer: (entry, run) =>
-      history.append(entry, { cwd: process.cwd(), sessionId, files: [...new Set((run?.edits ?? []).map((edit) => edit.path))] }),
+      history.append(entry, { cwd: process.cwd(), sessionId, files: changedFiles(run) }),
   });
 
   const screen = createScreen({

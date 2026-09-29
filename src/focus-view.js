@@ -1,13 +1,7 @@
 import { renderRecap } from './recap.js';
 import { truncate, widthOf, wrap } from './text-layout.js';
 
-const BOLD = '\x1b[1m';
-const DIM = '\x1b[2m';
-const GREEN = '\x1b[32m';
-const RED = '\x1b[31m';
-const INVERSE = '\x1b[7m';
-const RESET = '\x1b[0m';
-const INDENT = '  ';
+import { BOLD, DIM, GREEN, INDENT, INVERSE, RED, RESET } from './styles.js';
 
 /**
  * The quiz screen shown while the agent works: a status line, the running summary and one
