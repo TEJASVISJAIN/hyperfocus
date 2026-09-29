@@ -14,13 +14,13 @@
     "terminal",
     "cli"
   ],
-  "homepage": "https://github.com/TEJASVISJAIN/claude-focus#readme",
+  "homepage": "https://github.com/TEJASVISJAIN/hyperfocus#readme",
   "bugs": {
-    "url": "https://github.com/TEJASVISJAIN/claude-focus/issues"
+    "url": "https://github.com/TEJASVISJAIN/hyperfocus/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TEJASVISJAIN/claude-focus.git"
+    "url": "git+https://github.com/TEJASVISJAIN/hyperfocus.git"
   },
   "license": "MIT",
   "author": "Tejasvi S Jain",
