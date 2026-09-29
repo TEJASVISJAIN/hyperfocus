@@ -1,3 +1,4 @@
+import { renderRecap } from './recap.js';
 import { truncate, widthOf, wrap } from './text-layout.js';
 
 const BOLD = '\x1b[1m';
@@ -23,6 +24,7 @@ export function createFocusView({ onAnswer }) {
   let feedback = null; // { question, chosen } after an answer, until the next key
   let answered = 0;
   let correct = 0;
+  let recap = null; // { card, onDismiss } while the "while you were away" card is up
 
   const current = () => queue[0];
 
@@ -37,6 +39,16 @@ export function createFocusView({ onAnswer }) {
     },
     get score() {
       return { answered, correct };
+    },
+    get summary() {
+      return summary;
+    },
+
+    showRecap(card, onDismiss) {
+      recap = { card, onDismiss };
+    },
+    hideRecap() {
+      recap = null;
     },
 
     setActivity(label, startedAt) {
@@ -61,6 +73,11 @@ export function createFocusView({ onAnswer }) {
     },
 
     handleKey(key) {
+      if (recap) {
+        const { onDismiss } = recap;
+        recap = null;
+        return onDismiss();
+      }
       const question = current();
       if (!question) return;
       if (feedback) return next();
@@ -80,6 +97,7 @@ export function createFocusView({ onAnswer }) {
     render({ cols, rows, now = Date.now() }) {
       const textWidth = Math.max(10, cols - INDENT.length * 2);
       const header = [statusLine(cols, now), DIM + '─'.repeat(cols) + RESET, ''];
+      if (recap) return [...header, ...renderRecap(recap.card, { cols })].slice(0, rows).join('\r\n');
       const summaryBlock = [
         DIM + "What's happening" + RESET,
         ...(summary ? wrap(summary, textWidth) : ['Watching the agent…']).map((line) => INDENT + line),

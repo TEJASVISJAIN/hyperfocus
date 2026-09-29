@@ -33,6 +33,13 @@ export function createAutoSwitch({ delayMs, typingGraceMs, auto = true, currentV
         if (auto) schedule(delayMs);
         return;
       }
+      if (event.type === 'read' || event.type === 'edit' || event.type === 'command') {
+        // Claude carries on after a permission prompt without a new prompt event.
+        if (agentBusy) return;
+        agentBusy = true;
+        if (auto && !userChoseClaude) schedule(delayMs);
+        return;
+      }
       if (event.type !== 'done' && event.type !== 'needs-input') return;
 
       const wasBusy = agentBusy;

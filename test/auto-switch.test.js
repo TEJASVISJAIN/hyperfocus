@@ -108,3 +108,23 @@ test('with auto switching off, focus only opens by hand but still hands back con
   policy.agentEvent(done);
   assert.deepEqual(calls, ['return: done']);
 });
+
+test('after the user answers a permission prompt, tool activity counts as busy again', () => {
+  const { policy, calls } = setup();
+  policy.agentEvent(busy);
+  mock.timers.tick(8000);
+  policy.agentEvent(needsInput);
+  policy.agentEvent({ type: 'command', sessionId: 's', command: 'npm test' });
+  mock.timers.tick(8000);
+  assert.deepEqual(calls, ['open focus', 'return: needs-input', 'open focus']);
+});
+
+test('tool activity while already busy does not push the deadline back', () => {
+  const { policy, calls } = setup();
+  policy.agentEvent(busy);
+  policy.agentEvent({ type: 'read', sessionId: 's', target: 'a' });
+  mock.timers.tick(4000);
+  policy.agentEvent({ type: 'read', sessionId: 's', target: 'b' });
+  mock.timers.tick(4000);
+  assert.deepEqual(calls, ['open focus'], 'activity while already busy must not push the deadline back');
+});
