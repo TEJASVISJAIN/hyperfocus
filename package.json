@@ -1,6 +1,6 @@
 {
   "name": "@ddalus/hyperfocus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Stay in hyperfocus while your coding agent works: a quiz and recap about the change Claude Code is making, right in your terminal",
   "keywords": [
     "claude",
@@ -14,14 +14,6 @@
     "terminal",
     "cli"
   ],
-  "homepage": "https://github.com/TEJASVISJAIN/hyperfocus#readme",
-  "bugs": {
-    "url": "https://github.com/TEJASVISJAIN/hyperfocus/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/TEJASVISJAIN/hyperfocus.git"
-  },
   "license": "MIT",
   "author": "Tejasvi S Jain",
   "type": "module",

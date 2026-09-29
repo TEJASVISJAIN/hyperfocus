@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- The npm page no longer links to the source repository, which is private for now.
+
 ## 0.1.0
 
 First release.

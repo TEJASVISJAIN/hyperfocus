@@ -105,7 +105,7 @@ Keys you press in the focus view never reach Claude.
 - **History.** Every answer is appended to `~/.hyperfocus/history.jsonl` for `hyperfocus --stats` (and,
   later, for bringing back the questions you got wrong).
 
-For diagrams, sequences, state machines and design decisions, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Diagrams, sequences, state machines and design decisions are in `docs/ARCHITECTURE.md` in the source.
 
 ## Privacy
 
@@ -123,4 +123,4 @@ npm run typecheck  # tsc over the JS sources
 
 ## License
 
-[MIT](LICENSE)
+MIT. See the `LICENSE` file included in the package.
