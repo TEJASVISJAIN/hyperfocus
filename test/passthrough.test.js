@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import pty from 'node-pty';
+import xtermHeadless from '@xterm/headless';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
 const focusBin = fileURLToPath(new URL('../bin/focus.js', import.meta.url));
@@ -22,10 +23,13 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
   const waiters = [];
   let output = '';
   let transcript = '';
+  // What the user would actually see: everything focus sends, interpreted by a real terminal emulator.
+  const userTerminal = new xtermHeadless.Terminal({ cols, rows, allowProposedApi: true, scrollback: 0 });
 
   terminal.onData((data) => {
     output += data;
     transcript += data;
+    userTerminal.write(data);
     for (const match of output.matchAll(/@@(.*?)@@/g)) reports.push(JSON.parse(match[1]));
     output = output.slice(output.lastIndexOf('@@') + 2 || 0);
     for (const waiter of [...waiters]) waiter();
@@ -61,7 +65,17 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
       check();
     });
 
-  return { terminal, nextReport, waitForScreen, exited, transcript: () => transcript };
+  const userScreen = () =>
+    new Promise((resolve) =>
+      userTerminal.write('', () => {
+        const buffer = userTerminal.buffer.active;
+        const lines = [];
+        for (let row = 0; row < userTerminal.rows; row++) lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '');
+        resolve({ type: buffer.type, text: lines.join('\n') });
+      }),
+    );
+
+  return { terminal, nextReport, waitForScreen, userScreen, exited, transcript: () => transcript };
 }
 
 test('passes arguments through and gives claude a real terminal of the same size', async () => {
@@ -192,6 +206,66 @@ test('Ctrl-] works even when it arrives in the same chunk as other keys', async 
   focus.terminal.write(CTRL_RIGHT_BRACKET);
   await focus.waitForScreen(/\x1b\[\?1049l/);
   assert.equal((await focus.nextReport('line')).line, 'typed fast', 'the keys before Ctrl-] still reached claude');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('a flood of output while away is not replayed byte for byte, but the screen still ends up right', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write('flood 3000\r');
+  await focus.nextReport('line');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h/);
+  await pause(1500);
+  const sentBeforeReturn = focus.transcript().length;
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049l[\s\S]*FLOOD END/);
+  await pause(200);
+  const sentOnReturn = focus.transcript().length - sentBeforeReturn;
+  assert.ok(sentOnReturn < 300_000, `sent ${sentOnReturn} bytes on return`);
+  const screen = await focus.userScreen();
+  assert.equal(screen.type, 'normal');
+  assert.match(screen.text, /FLOOD END/);
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('if claude leaves its alternate screen while focus is up, the user ends up on the main screen', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write('raw 0 "\\u001b[?1049hCLAUDE FULLSCREEN VIEW"\r');
+  focus.terminal.write('raw 600 "\\u001b[?1049lBACK ON MAIN SCREEN\\r\\n"\r');
+  await pause(200);
+  assert.equal((await focus.userScreen()).type, 'alternate');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await pause(1000);
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await pause(500);
+  const screen = await focus.userScreen();
+  assert.equal(screen.type, 'normal', 'the real terminal left the alternate screen too');
+  assert.match(screen.text, /BACK ON MAIN SCREEN/);
+  assert.doesNotMatch(screen.text, /focus ·/, 'no leftovers of the focus view');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('returning while claude is still on its alternate screen repaints it exactly', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write('raw 0 "\\u001b[?1049h\\u001b[HPAGER LINE ONE\\r\\nPAGER LINE TWO"\r');
+  focus.terminal.write('raw 400 "\\r\\nWRITTEN WHILE AWAY"\r');
+  await pause(200);
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await pause(700);
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await pause(400);
+  const screen = await focus.userScreen();
+  assert.equal(screen.type, 'alternate');
+  assert.match(screen.text, /PAGER LINE ONE\nPAGER LINE TWO\nWRITTEN WHILE AWAY/);
+  assert.doesNotMatch(screen.text, /focus ·/);
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });

@@ -31,6 +31,10 @@ process.stdin.on('data', (chunk) => {
     if (laterMatch) setTimeout(() => report('later', { text: laterMatch[2] }), Number(laterMatch[1]));
     const hookMatch = line.match(/^hook (\d+) (\w+)$/);
     if (hookMatch) setTimeout(() => runHook(hookMatch[2]), Number(hookMatch[1]));
+    const rawMatch = line.match(/^raw (\d+) (.+)$/);
+    if (rawMatch) setTimeout(() => process.stdout.write(JSON.parse(rawMatch[2])), Number(rawMatch[1]));
+    const floodMatch = line.match(/^flood (\d+)$/);
+    if (floodMatch) setTimeout(() => flood(Number(floodMatch[1])), 50);
     const exitMatch = line.match(/^exit (\d+)$/);
     if (exitMatch) process.exit(Number(exitMatch[1]));
   }
@@ -47,4 +51,11 @@ function runHook(eventName) {
   };
   const hook = exec(command);
   hook.stdin.end(JSON.stringify({ hook_event_name: eventName, session_id: 'fake-session', ...payloads[eventName] }));
+}
+
+// Writes about `kilobytes` KB of redraw-like output, then a marker the tests can look for.
+function flood(kilobytes) {
+  const line = 'spinner frame '.padEnd(99, '.') + '\n';
+  for (let written = 0; written < kilobytes * 1024; written += line.length) process.stdout.write('\x1b[2K\r' + line);
+  process.stdout.write('FLOOD END\r\n');
 }
