@@ -1,0 +1,24 @@
+{
+  "name": "claude-focus",
+  "version": "0.1.0",
+  "description": "Keeps developers engaged while the coding agent works: quizzes and summaries on the agent's live changes, inside the terminal",
+  "type": "module",
+  "bin": {
+    "focus": "bin/focus.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  }
+}
