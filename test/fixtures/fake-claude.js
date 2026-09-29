@@ -2,8 +2,14 @@
 // Stand-in for `claude`: reports what it sees so tests can check the wrapper passes things through.
 const report = (event, data) => process.stdout.write(`@@${JSON.stringify({ event, ...data })}@@\r\n`);
 
+const argv = process.argv.slice(2);
+const settingsIndex = argv.indexOf('--settings');
+const settings = settingsIndex === -1 ? null : JSON.parse(argv.splice(settingsIndex, 2)[1]);
+
 report('start', {
-  args: process.argv.slice(2),
+  args: argv,
+  hookEvents: settings ? Object.keys(settings.hooks) : [],
+  hasFocusSocket: Boolean(process.env.CLAUDE_FOCUS_SOCK),
   isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   cols: process.stdout.columns,
   rows: process.stdout.rows,

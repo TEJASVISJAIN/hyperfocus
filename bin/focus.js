@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { runFocus } from '../src/app.js';
 import { resolveClaudeBinary } from '../src/claude-binary.js';
-import { runInPty, runPlain } from '../src/passthrough.js';
+import { runPlain } from '../src/passthrough.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
 const claudePath = resolveClaudeBinary();
@@ -16,7 +17,7 @@ const args = process.argv.slice(2);
 
 if (process.stdin.isTTY && process.stdout.isTTY) {
   ensureSpawnHelperIsExecutable();
-  runInPty(claudePath, args);
+  await runFocus(claudePath, args);
 } else {
   runPlain(claudePath, args);
 }

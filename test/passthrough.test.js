@@ -59,6 +59,16 @@ test('passes arguments through and gives claude a real terminal of the same size
   await focus.exited;
 });
 
+test('registers focus hooks with claude without touching the user args', async () => {
+  const focus = startFocus(['--continue']);
+  const start = await focus.nextReport('start');
+  assert.deepEqual(start.args, ['--continue']);
+  assert.deepEqual(start.hookEvents.sort(), ['Notification', 'PostToolUse', 'PreToolUse', 'Stop', 'UserPromptSubmit']);
+  assert.equal(start.hasFocusSocket, true);
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
 test('forwards keystrokes and propagates the exit code', async () => {
   const focus = startFocus();
   await focus.nextReport('start');
