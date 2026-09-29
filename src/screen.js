@@ -17,7 +17,7 @@ const END_FRAME = '\x1b[?2026l';
 // modifyOtherKeys — Claude Code turns the latter two on, so all three can arrive.
 const TOGGLE_KEY = /\x1d|\x1b\[93;5u|\x1b\[27;5;93~/;
 // One key per piece: escape sequences (arrows, function keys) stay whole, everything else is one character.
-const KEYS = /\x1b\[[0-9;?]*[\x40-\x7e]|\x1b.|[\s\S]/gu;
+const KEYS = /\x1b\[M[\s\S]{3}|\x1b\[[0-9;?<]*[\x40-\x7e]|\x1b.|[\s\S]/gu;
 
 /**
  * Owns the real terminal and decides whether it shows Claude or the focus view.

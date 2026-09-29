@@ -73,6 +73,9 @@ export function createFocusView({ onAnswer }) {
     },
 
     handleKey(key) {
+      // Escape sequences here are terminal reports (focus in/out, mouse, paste markers) or keys
+      // we don't use, never a deliberate "any key".
+      if (key.length > 1 && key.startsWith('\x1b')) return;
       if (recap) {
         const { onDismiss } = recap;
         recap = null;

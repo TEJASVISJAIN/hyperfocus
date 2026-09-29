@@ -70,3 +70,16 @@ test('any key dismisses the recap and is not taken as an answer', () => {
   assert.deepEqual(answers, []);
   assert.match(screenText(view.render({ cols: 80, rows: 30 })), /Q\?/, 'back to the quiz underneath');
 });
+
+test('terminal reports (focus in/out, mouse, bracketed paste markers) are not key presses', () => {
+  let dismissed = 0;
+  const answers = [];
+  const view = createFocusView({ onAnswer: (entry) => answers.push(entry) });
+  view.addQuestions([{ q: 'Q?', options: ['a', 'b'], answer: 0, why: 'w' }]);
+  view.handleKey('1');
+  view.showRecap(buildRecap({ run, summary: 's', score: { answered: 1, correct: 1 }, visibleMs: 20_000, answeredThisVisit: 1 }), () => dismissed++);
+  for (const report of ['\x1b[I', '\x1b[O', '\x1b[<0;10;5M', '\x1b[<0;10;5m', '\x1b[M !!', '\x1b[200~', '\x1b[201~']) view.handleKey(report);
+  assert.equal(dismissed, 0);
+  view.handleKey('x');
+  assert.equal(dismissed, 1);
+});
