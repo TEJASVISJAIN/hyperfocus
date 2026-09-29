@@ -54,6 +54,8 @@ test('turns the current run into a summary and multiple-choice questions', async
   assert.ok(call.argv.includes('-p'));
   assert.equal(call.child, '1', 'marks the session so focus hooks ignore it');
   assert.equal(call.sock, null, 'does not leak the parent socket');
+  assert.equal(call.argv[call.argv.indexOf('--setting-sources') + 1], 'user,project,local', 'keeps auth setup such as apiKeyHelper');
+  assert.equal(JSON.parse(call.argv[call.argv.indexOf('--settings') + 1]).disableAllHooks, true, 'but none of their hooks');
   assert.equal(call.maxThinking, '0', 'thinking off: it made each batch ~30s instead of ~6s');
   assert.match(call.stdin, /add retry to token refresh/);
   assert.match(call.stdin, /\+ return withRetry\(fetchToken\);/);

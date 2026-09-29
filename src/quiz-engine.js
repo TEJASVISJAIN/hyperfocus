@@ -5,15 +5,17 @@ import { SYSTEM_PROMPT, buildQuizPrompt, parseQuizReply } from './quiz-prompt.js
 
 const NEW_EDITS_BEFORE_REFRESH = 3;
 
-// A lean one-shot Claude: no tools, no settings/hooks/MCP from the user's setup, no saved session.
-// Cutting the default context this way makes each call roughly 70x cheaper.
+// A lean one-shot Claude: no tools, no MCP, no hooks, no saved session, and our own system prompt.
+// Cutting the default context this way makes each call roughly 70x cheaper. The user's settings
+// files still load, because that is where auth such as apiKeyHelper lives.
 const QUIZ_MODEL_ARGS = [
   '-p',
   '--model', 'haiku',
   '--output-format', 'json',
   '--tools', '',
   '--no-session-persistence',
-  '--setting-sources', '',
+  '--setting-sources', 'user,project,local',
+  '--settings', JSON.stringify({ disableAllHooks: true }),
   '--strict-mcp-config',
   '--system-prompt', SYSTEM_PROMPT,
 ];
