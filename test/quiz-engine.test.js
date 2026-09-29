@@ -13,7 +13,7 @@ function setup(mode = 'fenced') {
   const logPath = join(mkdtempSync(join(tmpdir(), 'focus-engine-')), 'calls.jsonl');
   const engine = createQuizEngine({
     claudePath: fakeHaiku,
-    env: { ...process.env, FAKE_HAIKU_MODE: mode, FAKE_HAIKU_LOG: logPath, CLAUDE_FOCUS_SOCK: '/tmp/parent.sock' },
+    env: { ...process.env, FAKE_HAIKU_MODE: mode, FAKE_HAIKU_LOG: logPath, HYPERFOCUS_SOCK: '/tmp/parent.sock' },
   });
   const calls = () => (existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
   return { engine, calls };
@@ -52,7 +52,7 @@ test('turns the current run into a summary and multiple-choice questions', async
   assert.equal(call.argv[call.argv.indexOf('--model') + 1], 'haiku');
   assert.equal(call.argv[call.argv.indexOf('--tools') + 1], '', 'the quiz model gets no tools');
   assert.ok(call.argv.includes('-p'));
-  assert.equal(call.child, '1', 'marks the session so focus hooks ignore it');
+  assert.equal(call.child, '1', 'marks the session so hyperfocus hooks ignore it');
   assert.equal(call.sock, null, 'does not leak the parent socket');
   assert.equal(call.argv[call.argv.indexOf('--setting-sources') + 1], 'user,project,local', 'keeps auth setup such as apiKeyHelper');
   assert.equal(JSON.parse(call.argv[call.argv.indexOf('--settings') + 1]).disableAllHooks, true, 'but none of their hooks');

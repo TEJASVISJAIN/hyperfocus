@@ -6,7 +6,7 @@ const MIN_VISIBLE_MS_FOR_RECAP = 15_000;
 const MAX_FILES_LISTED = 8;
 
 /**
- * The card shown when focus hands the screen back: what changed while the user was quizzed.
+ * The card shown when hyperfocus hands the screen back: what changed while the user was quizzed.
  * Skipped after a brief glance, when there is nothing the user missed.
  */
 export function buildRecap({ run, summary, score, visibleMs, answeredThisVisit, reason = 'done' }) {

@@ -5,7 +5,7 @@ import pty from 'node-pty';
 /** @type {NodeJS.Signals[]} */
 const FORWARDED_SIGNALS = ['SIGTERM', 'SIGHUP'];
 
-// Runs `claude` inside a pseudo-terminal we own, so focus can intercept its screen.
+// Runs `claude` inside a pseudo-terminal we own, so hyperfocus can intercept its screen.
 // `onOutput` receives everything claude draws; the caller decides what reaches the real terminal.
 export function startClaudeInPty(claudePath, args, { env, onOutput, onExit }) {
   const { stdout } = process;
@@ -24,7 +24,7 @@ export function startClaudeInPty(claudePath, args, { env, onOutput, onExit }) {
   return child;
 }
 
-// Puts the real terminal in raw mode for the lifetime of focus and guarantees it is restored.
+// Puts the real terminal in raw mode for the lifetime of hyperfocus and guarantees it is restored.
 export function takeOverTerminal(onInput) {
   const { stdin } = process;
   const restore = () => {
@@ -42,7 +42,7 @@ export function exitCodeFor({ exitCode, signal }) {
   return signal ? 128 + signal : exitCode;
 }
 
-// Piped or scripted use (e.g. `echo hi | focus -p`) has no terminal to take over,
+// Piped or scripted use (e.g. `echo hi | hyperfocus -p`) has no terminal to take over,
 // so hand stdio straight to claude.
 export function runPlain(claudePath, args) {
   const child = spawnPlain(claudePath, args, { stdio: 'inherit' });

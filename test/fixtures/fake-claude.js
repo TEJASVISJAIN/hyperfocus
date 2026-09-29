@@ -10,7 +10,7 @@ const settings = settingsIndex === -1 ? null : JSON.parse(argv.splice(settingsIn
 report('start', {
   args: argv,
   hookEvents: settings ? Object.keys(settings.hooks) : [],
-  hasFocusSocket: Boolean(process.env.CLAUDE_FOCUS_SOCK),
+  hasFocusSocket: Boolean(process.env.HYPERFOCUS_SOCK),
   isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   cols: process.stdout.columns,
   rows: process.stdout.rows,
@@ -40,7 +40,7 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-// Runs the hook command focus registered for `eventName`, the way Claude Code would.
+// Runs the hook command hyperfocus registered for `eventName`, the way Claude Code would.
 function runHook(eventName) {
   const command = settings?.hooks[eventName]?.[0]?.hooks[0]?.command;
   if (!command) return;

@@ -10,7 +10,7 @@ export function alertUser(message, write) {
   try {
     const child = spawn(
       'osascript',
-      ['-e', 'on run argv', '-e', 'display notification (item 1 of argv) with title "focus"', '-e', 'end run', message],
+      ['-e', 'on run argv', '-e', 'display notification (item 1 of argv) with title "hyperfocus"', '-e', 'end run', message],
       { stdio: 'ignore', detached: true },
     );
     child.on('error', () => {});

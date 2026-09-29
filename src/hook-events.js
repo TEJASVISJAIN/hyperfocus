@@ -1,5 +1,5 @@
-// Translates raw Claude Code hook payloads into the small event vocabulary focus works with.
-// Returns null for payloads focus doesn't care about or that are missing what it needs:
+// Translates raw Claude Code hook payloads into the small event vocabulary hyperfocus works with.
+// Returns null for payloads hyperfocus doesn't care about or that are missing what it needs:
 // hook payloads come from outside, so nothing here may assume a field is present.
 
 /**

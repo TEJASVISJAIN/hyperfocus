@@ -1,6 +1,6 @@
 # Architecture
 
-`focus` is a transparent wrapper around the real Claude Code CLI. It owns the terminal, watches
+`hyperfocus` is a transparent wrapper around the real Claude Code CLI. It owns the terminal, watches
 what the agent does through Claude Code hooks, and, while the agent is busy, swaps Claude's screen
 for a quiz about the change being made. This document covers how the pieces fit together and why
 they are shaped this way.
@@ -22,9 +22,9 @@ they are shaped this way.
 ```mermaid
 flowchart LR
     user([Developer]) <-->|keys / screen| tty[Real terminal]
-    tty <--> focus
+    tty <--> hyperfocus
 
-    subgraph focus["focus (node process)"]
+    subgraph hyperfocus["hyperfocus (node process)"]
         direction TB
         screen[Screen<br/>claude view ⇄ focus view]
         policy[Auto-switch policy]
@@ -33,11 +33,11 @@ flowchart LR
         engine[Quiz engine]
         view[Focus view<br/>quiz + recap]
         server[Event server<br/>unix socket]
-        history[(~/.focus/history.jsonl)]
+        history[(~/.hyperfocus/history.jsonl)]
     end
 
-    focus <-->|pseudo-terminal| claude[claude<br/>interactive Claude Code]
-    claude -->|runs on each hook| hook[focus-hook.js]
+    hyperfocus <-->|pseudo-terminal| claude[claude<br/>interactive Claude Code]
+    claude -->|runs on each hook| hook[hyperfocus-hook.js]
     hook -->|JSON line| server
     engine -->|stdin prompt / JSON reply| haiku[claude -p --model haiku]
     haiku --> api[(Claude API<br/>via user's login)]
@@ -57,9 +57,9 @@ There are three kinds of process:
 
 | Process | Lifetime | Role |
 | --- | --- | --- |
-| `focus` | the whole session | owns the real terminal, runs the logic |
-| `claude` (interactive) | the whole session, child of focus in a PTY | the real Claude Code, unmodified |
-| `focus-hook.js` | milliseconds, once per hook event | forwards one hook payload to focus |
+| `hyperfocus` | the whole session | owns the real terminal, runs the logic |
+| `claude` (interactive) | the whole session, child of hyperfocus in a PTY | the real Claude Code, unmodified |
+| `hyperfocus-hook.js` | milliseconds, once per hook event | forwards one hook payload to hyperfocus |
 | `claude -p --model haiku` | about 6s, once per question batch | writes the summary and questions |
 
 ## Processes and boundaries
@@ -71,7 +71,7 @@ flowchart TB
         stdout[/stdout/]
     end
 
-    subgraph focusproc["focus process"]
+    subgraph focusproc["hyperfocus process"]
         router{{Screen.input}}
         mirror[xterm headless mirror]
         hold[held-back output]
@@ -92,8 +92,8 @@ flowchart TB
     hold -->|replayed on return| stdout
     quiz -->|frames| stdout
 
-    claude -. "claude --settings {hooks}" .-> hooks[focus-hook.js]
-    hooks -. "CLAUDE_FOCUS_SOCK" .-> sock[(unix socket)]
+    claude -. "claude --settings {hooks}" .-> hooks[hyperfocus-hook.js]
+    hooks -. "HYPERFOCUS_SOCK" .-> sock[(unix socket)]
     sock -.-> focusproc
 ```
 
@@ -101,21 +101,21 @@ Where the boundaries are, and what crosses them:
 
 | Boundary | Mechanism | Payload |
 | --- | --- | --- |
-| user ↔ focus | the real TTY in raw mode | keystrokes in, ANSI out |
-| focus ↔ claude | `node-pty` pseudo-terminal | raw bytes both ways, plus resizes |
-| claude → focus | Claude Code hooks → `bin/focus-hook.js` → unix socket | one JSON hook payload per line |
-| focus → quiz model | `claude -p` subprocess | prompt on stdin, `--output-format json` on stdout |
-| focus → disk | append-only file | one JSON line per answered question |
+| user ↔ hyperfocus | the real TTY in raw mode | keystrokes in, ANSI out |
+| hyperfocus ↔ claude | `node-pty` pseudo-terminal | raw bytes both ways, plus resizes |
+| claude → hyperfocus | Claude Code hooks → `bin/hyperfocus-hook.js` → unix socket | one JSON hook payload per line |
+| hyperfocus → quiz model | `claude -p` subprocess | prompt on stdin, `--output-format json` on stdout |
+| hyperfocus → disk | append-only file | one JSON line per answered question |
 
 Hooks are injected with `claude --settings '<json>'`. Claude Code **merges** these with the user's
-own settings files (verified: a project `Stop` hook and the injected one both fire), so focus never
+own settings files (verified: a project `Stop` hook and the injected one both fire), so hyperfocus never
 writes to the user's configuration.
 
 ## Modules
 
 ```mermaid
 flowchart TB
-    bin[bin/focus.js<br/>entry, flag parsing] --> app[app.js<br/>wiring]
+    bin[bin/hyperfocus.js<br/>entry, flag parsing] --> app[app.js<br/>wiring]
     bin --> passthrough
     bin --> history
     app --> passthrough[passthrough.js<br/>PTY + raw TTY]
@@ -134,13 +134,13 @@ flowchart TB
     engine --> prompt[quiz-prompt.js<br/>prompt + parser]
     view --> recap
     view --> layout[text-layout.js]
-    hookbin[bin/focus-hook.js] -. socket .-> server
+    hookbin[bin/hyperfocus-hook.js] -. socket .-> server
 ```
 
 | Module | Responsibility | Tested at |
 | --- | --- | --- |
-| `bin/focus.js` | entry point: `--stats`, finding claude, TTY vs piped mode | CLI tests |
-| `bin/focus-hook.js` | forward a hook payload to the socket; never print, always exit 0 | `events.test.js` |
+| `bin/hyperfocus.js` | entry point: `--stats`, finding claude, TTY vs piped mode | CLI tests |
+| `bin/hyperfocus-hook.js` | forward a hook payload to the socket; never print, always exit 0 | `events.test.js` |
 | `src/app.js` | wires everything together; the only module that knows about all the others | end-to-end PTY tests |
 | `src/passthrough.js` | spawn claude in a PTY; raw mode; signals; exit codes; piped fallback | `passthrough.test.js` |
 | `src/screen.js` | which view is on screen; alternate screen; hold back and replay output; key routing | `passthrough.test.js` |
@@ -155,7 +155,7 @@ flowchart TB
 
 ### Event vocabulary
 
-Every Claude Code hook payload that focus cares about becomes one of six events
+Every Claude Code hook payload that hyperfocus cares about becomes one of six events
 (`src/hook-events.js`):
 
 | Hook | Tool matcher | `FocusEvent` |
@@ -175,15 +175,15 @@ Every Claude Code hook payload that focus cares about becomes one of six events
 sequenceDiagram
     autonumber
     actor U as User
-    participant F as focus
+    participant F as hyperfocus
     participant S as Event server
     participant C as claude (PTY)
 
-    U->>F: focus [claude args]
+    U->>F: hyperfocus [claude args]
     F->>F: parse focus-only flags (--no-auto, --stats)
     F->>F: find claude on PATH, chmod +x node-pty spawn-helper
     F->>S: listen on $TMPDIR/focus-<pid>.sock
-    F->>C: spawn claude --settings {hooks} [args]<br/>env CLAUDE_FOCUS_SOCK
+    F->>C: spawn claude --settings {hooks} [args]<br/>env HYPERFOCUS_SOCK
     F->>F: TTY raw mode, resize listener, 1s clock
     C-->>U: Claude Code UI (passed straight through)
 ```
@@ -195,8 +195,8 @@ sequenceDiagram
     autonumber
     actor U as User
     participant C as claude
-    participant H as focus-hook.js
-    participant F as focus
+    participant H as hyperfocus-hook.js
+    participant F as hyperfocus
     participant P as Auto-switch
     participant Q as Quiz engine
     participant M as claude -p haiku
@@ -240,7 +240,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant C as claude
-    participant F as focus
+    participant F as hyperfocus
     participant P as Auto-switch
     actor U as User
 
@@ -268,7 +268,7 @@ sequenceDiagram
     alt call in flight, run finished, or nothing to go on
         Q-->>S: (no-op)
     else first diff, or 3 new edits, or queue empty and something changed
-        Q->>M: spawn with CLAUDE_FOCUS_CHILD=1, MAX_THINKING_TOKENS=0,<br/>--tools "" --setting-sources "" --strict-mcp-config
+        Q->>M: spawn with HYPERFOCUS_CHILD=1, MAX_THINKING_TOKENS=0,<br/>--tools "" --strict-mcp-config, disableAllHooks
         M-->>Q: JSON envelope with result text (often a fenced JSON block)
         alt reply is not valid JSON
             Q->>M: retry once
@@ -296,13 +296,21 @@ sequenceDiagram
     else Claude already on the alternate screen
         Sc->>Sc: remember: repaint from the mirror later
     end
+    Note over Sc,T: Claude's alternate-screen state is tracked from its output as it arrives,<br/>because the mirror parses asynchronously
     Sc->>T: sync-frame( hide cursor, clear, focus view )
     C->>Sc: bytes → held back
+    C->>Sc: over 1MB held back → drop it, repaint later
     Note over Sc: showClaude()
     alt normal case
         Sc->>T: ESC[?1049l + cursor state + held-back bytes, verbatim
-    else Claude was on the alternate screen
-        Sc->>T: clear + serialized mirror
+    else repaint (Claude was on its alternate screen, or over 1MB)
+        Sc->>Sc: wait for the mirror to finish parsing
+        alt Claude on its alternate screen now
+            Sc->>T: clear + alternate buffer only
+        else Claude on its main screen now
+            Sc->>T: ESC[?1049l + clear + main buffer only
+        end
+        Sc->>T: output that arrived during the repaint
     end
     opt terminal resized while away
         Sc->>C: resize rows-1 then rows (Claude re-renders)
@@ -318,6 +326,7 @@ stateDiagram-v2
     [*] --> Claude
     Claude --> Waiting: busy (prompt, or tool activity after needs-input)
     Waiting --> Claude: done / needs-input before the delay
+    Waiting --> Claude: Esc / Ctrl-C (no Stop hook fires on an interrupt)
     Waiting --> Waiting: user typed within 2s (postpone)
     Waiting --> Focus: 8s elapsed and not typing
     Claude --> Focus: Ctrl-]
@@ -390,7 +399,7 @@ replaced by `(older change omitted)`.
 
 ## Terminal handling
 
-- **Raw mode** is on for focus's whole lifetime and is restored on exit, crash or signal
+- **Raw mode** is on for hyperfocus's whole lifetime and is restored on exit, crash or signal
   (`process.on('exit')`).
 - **Alternate screen (`?1049`)** holds the focus view, so Claude's main screen and scrollback are
   never drawn over.
@@ -402,7 +411,7 @@ replaced by `(older change omitted)`.
   since fast typing and pastes merge keys into one chunk.
 - **Synchronized output (`?2026`)** wraps every focus frame, so terminals that support it don't flicker
   on the 1-second clock redraw.
-- **Piped mode:** if stdin or stdout isn't a TTY, focus runs `claude` with inherited stdio and does
+- **Piped mode:** if stdin or stdout isn't a TTY, hyperfocus runs `claude` with inherited stdio and does
   nothing else.
 
 ## Failure handling
@@ -411,14 +420,18 @@ replaced by `(older change omitted)`.
 | --- | --- |
 | `claude` not on PATH | clear message, exit 127 |
 | node-pty `spawn-helper` shipped without +x | fixed at startup (`spawn-helper-permissions.js`) |
-| focus not listening / socket missing | hook exits 0 in milliseconds, prints nothing |
+| user interrupts Claude with Esc / Ctrl-C | Claude Code sends no `Stop` hook, so the key press itself ends the run and cancels the pending switch |
+| Claude prints a lot while the focus view is up | past 1MB of held-back output, it is dropped and Claude's current screen is repainted from the mirror on return |
+| malformed hook payload | fields are checked and bad payloads dropped; handler errors are caught so they can't kill the session |
+| hyperfocus exits unexpectedly | the exit handler always switches the terminal back to Claude's screen |
+| hyperfocus not listening / socket missing | hook exits 0 in milliseconds, prints nothing |
 | hook takes too long | the hook script gives up after 500ms; Claude's hook timeout is 5s |
 | quiz model returns prose or broken JSON | one retry, then skip that batch quietly |
 | quiz model API error | no retry; the view keeps showing the summary and "Thinking of a question…" |
 | model returns some malformed questions | those questions are dropped, the rest are kept |
 | agent finishes mid-call | the call is killed and its result ignored |
-| history file can't be written | logged with `FOCUS_DEBUG=1`; the session carries on |
-| focus-spawned `claude -p` would trigger hooks | `CLAUDE_FOCUS_CHILD=1` makes the hook a no-op, and `--setting-sources ""` skips the user's hooks |
+| history file can't be written | logged with `HYPERFOCUS_DEBUG=1`; the session carries on |
+| hyperfocus-spawned `claude -p` would trigger hooks | `HYPERFOCUS_CHILD=1` makes our hook a no-op, and `disableAllHooks` stops the user's hooks while their settings (and auth) still load |
 
 ## Testing strategy
 
@@ -431,11 +444,11 @@ Tests sit at seven agreed seams, all behind public interfaces:
 4. **Auto-switch policy:** with `node:test` mock timers.
 5. **Focus view and recap:** rendering as a function of state and size, plus key handling.
 6. **History and `--stats`:** including the CLI with a temporary `HOME`.
-7. **End to end in a PTY:** `focus` runs inside an outer pseudo-terminal against
+7. **End to end in a PTY:** `hyperfocus` runs inside an outer pseudo-terminal against
    `test/fixtures/fake-claude.js`, which reports what it receives and can run the injected hook
    commands the way Claude Code would.
 
-On top of that, focus was run against real Claude Code 2.1.285 in a throwaway project: auto-open,
+On top of that, hyperfocus was run against real Claude Code 2.1.285 in a throwaway project: auto-open,
 a generated question, an answer, two real `Write` hooks, `Stop`, the recap and an intact return.
 
 ## Design decisions
@@ -444,9 +457,9 @@ a generated question, an answer, two real `Write` hooks, `Stop`, the recap and a
 | --- | --- | --- |
 | Where the quiz lives | wrapper that owns the terminal | second window (people won't switch views); a new frontend on the Agent SDK (would mean rebuilding Claude Code's UI) |
 | Seeing agent activity | hooks via `--settings` | parsing the transcript JSONL (lags, undocumented format); editing `settings.json` (touches user config) |
-| Hook → focus transport | unix socket, one line per payload | file tailing (polling, cleanup); HTTP (a port to manage) |
+| Hook → hyperfocus transport | unix socket, one line per payload | file tailing (polling, cleanup); HTTP (a port to manage) |
 | Screen switching | alternate screen + byte replay | always repainting from the mirror (drifts from Claude's own screen model) |
-| Question model | `claude -p --model haiku`, lean flags, no thinking | Anthropic SDK (needs an API key the user may not have); default flags (~21k context tokens, ~30s with thinking) |
+| Question model | `claude -p --model haiku`, lean flags, no thinking, user settings kept for auth | Anthropic SDK (needs an API key the user may not have); default flags (~21k context tokens, ~30s with thinking) |
 | When to ask again | first diff, every 3 edits, or when the queue is empty | one call per event (cost, noise) |
 | Language | plain Node ESM, JSDoc types checked by `tsc` | TypeScript build step (slower hook startup, more tooling) |
 
@@ -456,7 +469,7 @@ a generated question, an answer, two real `Write` hooks, `Stop`, the recap and a
   compiles on install (needs `python3`, `make` and a C++ compiler). Desktop notifications are
   macOS-only; the bell works everywhere.
 - **Windows:** untested. Named pipes would replace the unix socket.
-- **One session:** focus follows only the Claude process it started.
+- **One session:** hyperfocus follows only the Claude process it started.
 - **Subagents:** `SubagentStop` isn't hooked, so subagent activity shows up only through its tool events.
 - **Replay after a resize while away:** held-back output was laid out for the old size. The resize
   nudge makes Claude re-render, but a brief glitch is possible.

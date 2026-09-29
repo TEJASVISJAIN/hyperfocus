@@ -28,8 +28,8 @@ export function createQuizEngine({ claudePath, env = process.env }) {
   const engine = new EventEmitter();
   /** @type {NodeJS.ProcessEnv} */
   // Haiku thinks for ~3k tokens by default here, which turned a 6s batch into 30s.
-  const childEnv = { ...env, CLAUDE_FOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
-  delete childEnv.CLAUDE_FOCUS_SOCK;
+  const childEnv = { ...env, HYPERFOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
+  delete childEnv.HYPERFOCUS_SOCK;
 
   let inFlight = null;
   let runStartedAt = null;

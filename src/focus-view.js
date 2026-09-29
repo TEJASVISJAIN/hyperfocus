@@ -112,7 +112,7 @@ export function createFocusView({ onAnswer }) {
 
   function statusLine(cols, now) {
     const hint = 'Ctrl-] back to Claude ';
-    const left = ` focus · ${activity} · ${formatElapsed(now - activityStartedAt)} `;
+    const left = ` hyperfocus · ${activity} · ${formatElapsed(now - activityStartedAt)} `;
     const room = cols - widthOf(hint);
     const fitted = room >= 12 ? truncate(left, room) : truncate(left, cols);
     const padding = ' '.repeat(Math.max(0, cols - widthOf(fitted) - (room >= 12 ? widthOf(hint) : 0)));

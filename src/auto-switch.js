@@ -1,9 +1,9 @@
 /**
- * Decides when focus takes over the screen and when it hands it back.
+ * Decides when hyperfocus takes over the screen and when it hands it back.
  *
  * - The agent must be busy for `delayMs` first, so quick replies never interrupt.
  * - Never switch away while the user is typing.
- * - The moment the agent finishes or needs the user, give the screen back — whoever opened focus.
+ * - The moment the agent finishes or needs the user, give the screen back, whoever opened the focus view.
  * - If the user goes back to Claude by hand, respect it until their next prompt.
  */
 export function createAutoSwitch({ delayMs, typingGraceMs, auto = true, currentView, openFocus, returnToClaude }) {

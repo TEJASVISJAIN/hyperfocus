@@ -19,7 +19,7 @@ process.stdin.on('data', (chunk) => (stdin += chunk));
 process.stdin.on('end', async () => {
   appendFileSync(
     logPath,
-    JSON.stringify({ argv: process.argv.slice(2), child: process.env.CLAUDE_FOCUS_CHILD, maxThinking: process.env.MAX_THINKING_TOKENS ?? null, sock: process.env.CLAUDE_FOCUS_SOCK ?? null, stdin }) + '\n',
+    JSON.stringify({ argv: process.argv.slice(2), child: process.env.HYPERFOCUS_CHILD, maxThinking: process.env.MAX_THINKING_TOKENS ?? null, sock: process.env.HYPERFOCUS_SOCK ?? null, stdin }) + '\n',
   );
   if (mode === 'slow') await new Promise((resolve) => setTimeout(resolve, 3000));
   const reply = (result, isError = false) => process.stdout.write(JSON.stringify({ type: 'result', is_error: isError, result }));

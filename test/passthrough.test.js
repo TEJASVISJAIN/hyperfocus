@@ -6,7 +6,7 @@ import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const focusBin = fileURLToPath(new URL('../bin/focus.js', import.meta.url));
+const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
 const fakeClaude = fileURLToPath(new URL('./fixtures/fake-claude.js', import.meta.url));
 const REPORT_TIMEOUT_MS = 5000;
 
@@ -17,7 +17,7 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
   const terminal = pty.spawn(process.execPath, [focusBin, ...args], {
     cols,
     rows,
-    env: { ...process.env, FOCUS_CLAUDE_BIN: fakeClaude, ...env },
+    env: { ...process.env, HYPERFOCUS_CLAUDE_BIN: fakeClaude, ...env },
   });
   const reports = [];
   const waiters = [];
@@ -89,7 +89,7 @@ test('passes arguments through and gives claude a real terminal of the same size
   await focus.exited;
 });
 
-test('registers focus hooks with claude without touching the user args', async () => {
+test('registers hyperfocus hooks with claude without touching the user args', async () => {
   const focus = startFocus(['--continue']);
   const start = await focus.nextReport('start');
   assert.deepEqual(start.args, ['--continue']);
@@ -128,14 +128,14 @@ function runFocusWithoutTerminal(env) {
 }
 
 test('without a terminal, hands stdio straight to claude', async () => {
-  const result = await runFocusWithoutTerminal({ FOCUS_CLAUDE_BIN: fakeClaude });
+  const result = await runFocusWithoutTerminal({ HYPERFOCUS_CLAUDE_BIN: fakeClaude });
   assert.match(result.stdout, /"args":\["-p","hi"\]/);
   assert.match(result.stdout, /"isTTY":false/);
   assert.equal(result.code, 4);
 });
 
 test('explains clearly when claude is not installed', async () => {
-  const result = await runFocusWithoutTerminal({ FOCUS_CLAUDE_BIN: 'definitely-not-claude', PATH: '/nonexistent' });
+  const result = await runFocusWithoutTerminal({ HYPERFOCUS_CLAUDE_BIN: 'definitely-not-claude', PATH: '/nonexistent' });
   assert.equal(result.code, 127);
   assert.match(result.stderr, /could not find `claude`/);
 });
@@ -186,8 +186,8 @@ test('claude output produced while in the focus view appears after switching bac
   await focus.exited;
 });
 
-test('focus opens by itself while the agent works and hands back with a bell when it stops', async () => {
-  const focus = startFocus([], { env: { FOCUS_DELAY_MS: '100' } });
+test('the focus view opens by itself while the agent works and hands back with a bell when it stops', async () => {
+  const focus = startFocus([], { env: { HYPERFOCUS_DELAY_MS: '100' } });
   await focus.nextReport('start');
   focus.terminal.write('hook 0 UserPromptSubmit\r');
   focus.terminal.write('hook 2600 Stop\r'); // after the 2s typing grace

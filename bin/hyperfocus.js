@@ -16,8 +16,8 @@ if (stats) {
 const claudePath = resolveClaudeBinary();
 if (!claudePath) {
   process.stderr.write(
-    'focus: could not find `claude` on your PATH.\n' +
-      'Install Claude Code (https://claude.com/claude-code) or set FOCUS_CLAUDE_BIN to its path.\n',
+    'hyperfocus: could not find `claude` on your PATH.\n' +
+      'Install Claude Code (https://claude.com/claude-code) or set HYPERFOCUS_CLAUDE_BIN to its path.\n',
   );
   process.exit(127);
 }

@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { debugLog } from './debug-log.js';
 
-export const defaultHistoryPath = () => join(homedir(), '.focus', 'history.jsonl');
+export const defaultHistoryPath = () => join(homedir(), '.hyperfocus', 'history.jsonl');
 
 // Every answered or skipped question, kept so a later version can bring back the ones you missed.
 export function createHistory({ path = defaultHistoryPath() } = {}) {
@@ -55,7 +55,7 @@ export function readStats(path = defaultHistoryPath()) {
 }
 
 export function formatStats(stats) {
-  if (!stats.length) return 'No quiz answers recorded yet. Run `focus` and answer a few questions while Claude works.\n';
+  if (!stats.length) return 'No quiz answers recorded yet. Run `hyperfocus` and answer a few questions while Claude works.\n';
 
   const home = homedir();
   const insideHome = (path) => path === home || path.startsWith(home + sep);
@@ -70,7 +70,7 @@ export function formatStats(stats) {
     `  ${project.label.padEnd(labelWidth)}  ${String(project.answered).padStart(8)}  ${accuracy(project).padStart(9)}  ${String(project.skipped).padStart(7)}`;
 
   return [
-    'focus quiz history',
+    'hyperfocus quiz history',
     '',
     `  ${'project'.padEnd(labelWidth)}  ${'answered'.padStart(8)}  ${'correct'.padStart(9)}  ${'skipped'.padStart(7)}`,
     ...rows.map(format),

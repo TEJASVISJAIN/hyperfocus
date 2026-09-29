@@ -1,14 +1,14 @@
-# claude-focus
+# hyperfocus
 
-Stay with your code while Claude works, instead of reaching for your phone.
+Stay in hyperfocus while your coding agent works, instead of reaching for your phone.
 
-`focus` runs the real Claude Code. When the agent has been busy for a few seconds, the terminal
+`hyperfocus` runs the real Claude Code. When the agent has been busy for a few seconds, the terminal
 switches to a short quiz about **the change Claude is making right now**: why it's done this way,
 what could break, which edge cases matter. As soon as Claude finishes or needs you, the terminal
 switches back, with a recap of what you missed.
 
 ```
- focus · editing src/auth.ts · 0:14                 Ctrl-] back to Claude
+ hyperfocus · editing src/auth.ts · 0:14            Ctrl-] back to Claude
 ──────────────────────────────────────────────────────────────────────────
 
 What's happening
@@ -28,15 +28,26 @@ Question 1
 
 ## Install
 
-Requires Node 22+ and [Claude Code](https://claude.com/claude-code), logged in.
+You need **Node.js 22 or newer** and **[Claude Code](https://claude.com/claude-code), installed and
+logged in**. If you already use `claude`, you're set.
 
 ```sh
-npm install -g claude-focus   # or run from a checkout: node bin/focus.js
-focus                          # use it exactly like `claude`
+npm install -g hyperfocus
+hyperfocus                  # use it exactly like `claude`
 ```
 
-Every argument is passed through to `claude`: `focus --continue`, `focus --model sonnet`, and so on.
-When input or output is piped (`echo hi | focus -p`), focus steps aside and runs `claude` directly.
+There is no separate account, sign-up or API key. hyperfocus runs your own `claude`, both for your
+session and for the small model calls that write the questions, so it uses whatever login Claude Code
+already has: a Claude subscription, an API key, `apiKeyHelper`, or Bedrock/Vertex. The question calls
+count toward your own usage, at about $0.003 per batch.
+
+Every argument is passed through to `claude`: `hyperfocus --continue`, `hyperfocus --model sonnet`,
+and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus steps aside and runs
+`claude` directly.
+
+**Linux:** installing compiles one native dependency (`node-pty`), so you need `python3`, `make` and a
+C++ compiler (`sudo apt install build-essential python3` on Debian/Ubuntu). macOS needs nothing extra.
+Windows isn't supported yet.
 
 ## Keys
 
@@ -51,12 +62,12 @@ Keys you press in the focus view never reach Claude.
 
 ## When it switches
 
-- **To focus:** after the agent has been busy for 8 seconds, and you haven't typed for 2 seconds.
+- **To the focus view:** after the agent has been busy for 8 seconds, and you haven't typed for 2 seconds.
   Quick replies never interrupt you.
-- **Back to Claude:** the moment Claude finishes or asks for input (a permission prompt, a question).
-  You get a terminal bell and a macOS notification. If you were in the focus view for 15 seconds
-  or more, or answered anything, a "while you were away" card shows first.
-- If you switch back to Claude yourself, focus stays out of the way until your next prompt.
+- **Back to Claude:** the moment Claude finishes, asks for input (a permission prompt, a question) or
+  you interrupt it with Esc. You get a terminal bell and, on macOS, a notification. If you were in the
+  focus view for 15 seconds or more, or answered anything, a "while you were away" card shows first.
+- If you switch back to Claude yourself, hyperfocus stays out of the way until your next prompt.
 
 ## Options
 
@@ -64,26 +75,26 @@ Keys you press in the focus view never reach Claude.
 | --- | --- | --- |
 | `--no-auto` | off | never open the focus view by itself; `Ctrl-]` still works |
 | `--stats` | | print quiz answers and accuracy per project, then exit |
-| `FOCUS_DELAY_MS` | `8000` | how long the agent must be busy before focus opens |
-| `FOCUS_DEBUG=1` | off | log hook events and errors to `~/.focus/debug.log` |
-| `FOCUS_CLAUDE_BIN` | `claude` on `PATH` | the Claude Code executable to run |
+| `HYPERFOCUS_DELAY_MS` | `8000` | how long the agent must be busy before the focus view opens |
+| `HYPERFOCUS_DEBUG=1` | off | log hook events and errors to `~/.hyperfocus/debug.log` |
+| `HYPERFOCUS_CLAUDE_BIN` | `claude` on `PATH` | the Claude Code executable to run |
 
 ## How it works
 
-- **Hooks, without touching your settings.** focus starts Claude with `claude --settings '{"hooks": …}'`.
-  Claude Code merges these hooks with your own, so nothing on disk changes. The hooks (`UserPromptSubmit`,
-  `PreToolUse` for reads, `PostToolUse` for edits and commands, `Stop`, `Notification`) forward
-  each event to focus over a unix socket. The hook script never prints and always exits 0, so it
-  can't affect Claude.
-- **One terminal.** Claude runs in a pseudo-terminal that focus owns. The focus view is drawn on the
-  alternate screen. Claude's output is held back while the quiz is up and replayed exactly when
-  you return, so Claude's screen comes back intact.
-- **Questions.** A one-shot `claude -p --model haiku` call (using your Claude login, with no tools,
-  no settings, no MCP and thinking turned off) reads your prompt, the files Claude looked at and
-  the diffs it wrote, and returns a summary plus multiple-choice questions. It asks again after
-  every 3 new edits or when you run out of questions. A batch takes about 6 seconds and costs about $0.003.
-- **History.** Every answer is appended to `~/.focus/history.jsonl` for `focus --stats` (and, later,
-  for bringing back the questions you got wrong).
+- **Hooks, without touching your settings.** hyperfocus starts Claude with
+  `claude --settings '{"hooks": …}'`. Claude Code merges these hooks with your own, so nothing on disk
+  changes. The hooks (`UserPromptSubmit`, `PreToolUse` for reads, `PostToolUse` for edits and commands,
+  `Stop`, `Notification`) forward each event to hyperfocus over a unix socket. The hook script never
+  prints and always exits 0, so it can't affect Claude.
+- **One terminal.** Claude runs in a pseudo-terminal that hyperfocus owns. The focus view is drawn on the
+  alternate screen. Claude's output is held back while the quiz is up and replayed exactly when you
+  return, so Claude's screen comes back intact.
+- **Questions.** A one-shot `claude -p --model haiku` call reads your prompt, the files Claude looked at
+  and the diffs it wrote, and returns a summary plus multiple-choice questions. That call has no tools,
+  no MCP, none of your hooks and no thinking, which keeps it to about 6 seconds and $0.003. It asks again
+  on the first change, after every 3 new edits, or when you run out of questions.
+- **History.** Every answer is appended to `~/.hyperfocus/history.jsonl` for `hyperfocus --stats` (and,
+  later, for bringing back the questions you got wrong).
 
 For diagrams, sequences, state machines and design decisions, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -100,3 +111,7 @@ npm install
 npm test           # node:test suite, includes PTY-driven end-to-end tests with a fake claude
 npm run typecheck  # tsc over the JS sources
 ```
+
+## License
+
+[MIT](LICENSE)

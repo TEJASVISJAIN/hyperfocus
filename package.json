@@ -1,10 +1,10 @@
 {
-  "name": "claude-focus",
+  "name": "hyperfocus",
   "version": "0.1.0",
-  "description": "Keeps developers engaged while the coding agent works: quizzes and summaries on the agent's live changes, inside the terminal",
+  "description": "Stay in hyperfocus while your coding agent works: a quiz and recap about the change Claude Code is making, right in your terminal",
   "type": "module",
   "bin": {
-    "focus": "bin/focus.js"
+    "hyperfocus": "bin/hyperfocus.js"
   },
   "files": [
     "bin",

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, test } from 'node:test';
 import { startEventServer } from '../src/event-server.js';
 
-const hookScript = fileURLToPath(new URL('../bin/focus-hook.js', import.meta.url));
+const hookScript = fileURLToPath(new URL('../bin/hyperfocus-hook.js', import.meta.url));
 
 // Runs the hook exactly the way Claude Code does: payload JSON on stdin, env inherited.
 function runHook(payload, env) {
@@ -26,7 +26,7 @@ afterEach(() => server.close());
 
 async function sendAndReceive(payload) {
   const received = once(server.events, 'event');
-  const result = await runHook(payload, { CLAUDE_FOCUS_SOCK: server.socketPath });
+  const result = await runHook(payload, { HYPERFOCUS_SOCK: server.socketPath });
   assert.equal(result.code, 0);
   assert.equal(result.stdout, '', 'hooks must never print: Claude would treat stdout as feedback');
   const [event] = await received;
@@ -102,23 +102,23 @@ test('stopping and asking for input hand control back to the user', async () => 
   );
 });
 
-test('the hook does nothing inside focus-spawned claude sessions', async () => {
+test('the hook does nothing inside hyperfocus-spawned claude sessions', async () => {
   let received = false;
   server.events.on('event', () => (received = true));
-  const result = await runHook({ hook_event_name: 'Stop', session_id: 's' }, { CLAUDE_FOCUS_SOCK: server.socketPath, CLAUDE_FOCUS_CHILD: '1' });
+  const result = await runHook({ hook_event_name: 'Stop', session_id: 's' }, { HYPERFOCUS_SOCK: server.socketPath, HYPERFOCUS_CHILD: '1' });
   assert.equal(result.code, 0);
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(received, false);
 });
 
-test('the hook exits quietly and quickly when focus is not listening', async () => {
-  const result = await runHook({ hook_event_name: 'Stop', session_id: 's' }, { CLAUDE_FOCUS_SOCK: '/tmp/no-such-focus.sock' });
+test('the hook exits quietly and quickly when hyperfocus is not listening', async () => {
+  const result = await runHook({ hook_event_name: 'Stop', session_id: 's' }, { HYPERFOCUS_SOCK: '/tmp/no-such-focus.sock' });
   assert.equal(result.code, 0);
   assert.equal(result.stdout + result.stderr, '');
   assert.ok(result.elapsedMs < 1000, `took ${result.elapsedMs}ms`);
 });
 
-test('malformed payloads are ignored and never take focus down', async () => {
+test('malformed payloads are ignored and never take hyperfocus down', async () => {
   const malformed = [
     null,
     { hook_event_name: 'PostToolUse', session_id: 's', tool_name: 'MultiEdit', tool_input: { file_path: '/a.ts' } },
@@ -128,7 +128,7 @@ test('malformed payloads are ignored and never take focus down', async () => {
   ];
   const received = [];
   server.events.on('event', (event) => received.push(event));
-  for (const payload of malformed) await runHook(payload, { CLAUDE_FOCUS_SOCK: server.socketPath });
+  for (const payload of malformed) await runHook(payload, { HYPERFOCUS_SOCK: server.socketPath });
   assert.deepEqual(await sendAndReceive({ hook_event_name: 'Stop', session_id: 's' }), { type: 'done', sessionId: 's' });
   assert.deepEqual(received, [{ type: 'done', sessionId: 's' }]);
 });

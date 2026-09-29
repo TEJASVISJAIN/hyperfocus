@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createHistory, readStats } from '../src/history.js';
 
-const focusBin = fileURLToPath(new URL('../bin/focus.js', import.meta.url));
+const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
 const question = { q: 'Why retry?', options: ['a', 'b', 'c'], answer: 1, why: 'w' };
 const tempDir = () => mkdtempSync(join(tmpdir(), 'focus-history-'));
 
@@ -56,31 +56,31 @@ function runFocus(args, env) {
   });
 }
 
-test('focus --stats prints accuracy per project without starting claude', async () => {
+test('hyperfocus --stats prints accuracy per project without starting claude', async () => {
   const home = tempDir();
-  mkdirSync(join(home, '.focus'));
+  mkdirSync(join(home, '.hyperfocus'));
   const line = (cwd, correct) => JSON.stringify({ cwd, correct, skipped: false, question: 'q' });
-  writeFileSync(join(home, '.focus', 'history.jsonl'), [line('/work/api', true), line('/work/api', true), line('/work/api', false), line('/work/web', false)].join('\n'));
+  writeFileSync(join(home, '.hyperfocus', 'history.jsonl'), [line('/work/api', true), line('/work/api', true), line('/work/api', false), line('/work/web', false)].join('\n'));
 
-  const result = await runFocus(['--stats'], { HOME: home, FOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  const result = await runFocus(['--stats'], { HOME: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /\/work\/api\s+3\s+2 \(67%\)/);
   assert.match(result.stdout, /\/work\/web\s+1\s+0 \(0%\)/);
   assert.match(result.stdout, /total\s+4\s+2 \(50%\)/);
 });
 
-test('focus --stats with no history explains how to get some', async () => {
-  const result = await runFocus(['--stats'], { HOME: tempDir(), FOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+test('hyperfocus --stats with no history explains how to get some', async () => {
+  const result = await runFocus(['--stats'], { HOME: tempDir(), HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.equal(result.code, 0);
   assert.match(result.stdout, /No quiz answers recorded yet/);
 });
 
 test('--stats shortens only paths inside the home folder to ~', async () => {
   const home = tempDir();
-  mkdirSync(join(home, '.focus'));
+  mkdirSync(join(home, '.hyperfocus'));
   const line = (cwd) => JSON.stringify({ cwd, correct: true, skipped: false, question: 'q' });
-  writeFileSync(join(home, '.focus', 'history.jsonl'), [line(join(home, 'app')), line(home + '2/app')].join('\n'));
-  const result = await runFocus(['--stats'], { HOME: home, FOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  writeFileSync(join(home, '.hyperfocus', 'history.jsonl'), [line(join(home, 'app')), line(home + '2/app')].join('\n'));
+  const result = await runFocus(['--stats'], { HOME: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.match(result.stdout, /~\/app\s/);
   assert.ok(result.stdout.includes(home + '2/app'), result.stdout);
   assert.doesNotMatch(result.stdout, /~2\/app/);

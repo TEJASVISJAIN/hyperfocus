@@ -1,4 +1,4 @@
-// Width here means code points, which is right for the ASCII and box-drawing text focus draws.
+// Width here means code points, which is right for the ASCII and box-drawing text hyperfocus draws.
 export const widthOf = (text) => [...text].length;
 
 export function truncate(text, width) {

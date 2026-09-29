@@ -20,7 +20,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   const write = (data) => stdout.write(data);
 
   const child = startClaudeInPty(claudePath, ['--settings', JSON.stringify(buildHookSettings()), ...claudeArgs], {
-    env: { ...process.env, CLAUDE_FOCUS_SOCK: eventServer.socketPath },
+    env: { ...process.env, HYPERFOCUS_SOCK: eventServer.socketPath },
     onOutput: (data) => screen.claudeOutput(data),
     onExit: (result) => {
       screen.showClaude();
@@ -103,7 +103,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   // Keeps the elapsed time on the status line moving.
   setInterval(() => screen.redrawFocus(), CLOCK_TICK_MS).unref();
 
-  // However focus exits, never leave the user on the focus screen with the cursor hidden.
+  // However hyperfocus exits, never leave the user on the focus screen with the cursor hidden.
   process.on('exit', () => screen.showClaude());
 
   const restoreTerminal = takeOverTerminal((chunk) => {

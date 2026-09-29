@@ -8,9 +8,9 @@ import { toFocusEvent } from './hook-events.js';
 
 let serverCount = 0;
 
-// Listens on a unix socket for payloads from bin/focus-hook.js and emits them as FocusEvents.
+// Listens on a unix socket for payloads from bin/hyperfocus-hook.js and emits them as FocusEvents.
 export async function startEventServer() {
-  const socketPath = join(tmpdir(), `focus-${process.pid}-${serverCount++}.sock`);
+  const socketPath = join(tmpdir(), `hyperfocus-${process.pid}-${serverCount++}.sock`);
   rmSync(socketPath, { force: true });
 
   const events = new EventEmitter();
