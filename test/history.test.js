@@ -74,3 +74,14 @@ test('focus --stats with no history explains how to get some', async () => {
   assert.equal(result.code, 0);
   assert.match(result.stdout, /No quiz answers recorded yet/);
 });
+
+test('--stats shortens only paths inside the home folder to ~', async () => {
+  const home = tempDir();
+  mkdirSync(join(home, '.focus'));
+  const line = (cwd) => JSON.stringify({ cwd, correct: true, skipped: false, question: 'q' });
+  writeFileSync(join(home, '.focus', 'history.jsonl'), [line(join(home, 'app')), line(home + '2/app')].join('\n'));
+  const result = await runFocus(['--stats'], { HOME: home, FOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  assert.match(result.stdout, /~\/app\s/);
+  assert.ok(result.stdout.includes(home + '2/app'), result.stdout);
+  assert.doesNotMatch(result.stdout, /~2\/app/);
+});

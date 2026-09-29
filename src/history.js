@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { debugLog } from './debug-log.js';
 
 export const defaultHistoryPath = () => join(homedir(), '.focus', 'history.jsonl');
@@ -58,7 +58,8 @@ export function formatStats(stats) {
   if (!stats.length) return 'No quiz answers recorded yet. Run `focus` and answer a few questions while Claude works.\n';
 
   const home = homedir();
-  const rows = stats.map((project) => ({ ...project, label: project.cwd.startsWith(home) ? '~' + project.cwd.slice(home.length) : project.cwd }));
+  const insideHome = (path) => path === home || path.startsWith(home + sep);
+  const rows = stats.map((project) => ({ ...project, label: insideHome(project.cwd) ? '~' + project.cwd.slice(home.length) : project.cwd }));
   const total = rows.reduce(
     (sum, project) => ({ ...sum, answered: sum.answered + project.answered, correct: sum.correct + project.correct, skipped: sum.skipped + project.skipped }),
     { label: 'total', answered: 0, correct: 0, skipped: 0 },
