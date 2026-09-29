@@ -26,6 +26,8 @@ process.stdin.on('data', (chunk) => {
     buffered = buffered.slice(newline + 1);
     if (!line) continue;
     report('line', { line });
+    const laterMatch = line.match(/^later (\d+) (.+)$/);
+    if (laterMatch) setTimeout(() => report('later', { text: laterMatch[2] }), Number(laterMatch[1]));
     const exitMatch = line.match(/^exit (\d+)$/);
     if (exitMatch) process.exit(Number(exitMatch[1]));
   }

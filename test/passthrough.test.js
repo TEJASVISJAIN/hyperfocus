@@ -21,9 +21,11 @@ function startFocus(args = [], { cols = 80, rows = 24 } = {}) {
   const reports = [];
   const waiters = [];
   let output = '';
+  let transcript = '';
 
   terminal.onData((data) => {
     output += data;
+    transcript += data;
     for (const match of output.matchAll(/@@(.*?)@@/g)) reports.push(JSON.parse(match[1]));
     output = output.slice(output.lastIndexOf('@@') + 2 || 0);
     for (const waiter of [...waiters]) waiter();
@@ -45,7 +47,21 @@ function startFocus(args = [], { cols = 80, rows = 24 } = {}) {
       check();
     });
 
-  return { terminal, nextReport, exited };
+  // Resolves once everything the user's terminal has received so far matches `pattern`.
+  const waitForScreen = (pattern) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${pattern}`)), REPORT_TIMEOUT_MS);
+      const check = () => {
+        if (!pattern.test(transcript)) return;
+        clearTimeout(timer);
+        waiters.splice(waiters.indexOf(check), 1);
+        resolve(transcript);
+      };
+      waiters.push(check);
+      check();
+    });
+
+  return { terminal, nextReport, waitForScreen, exited, transcript: () => transcript };
 }
 
 test('passes arguments through and gives claude a real terminal of the same size', async () => {
@@ -108,4 +124,50 @@ test('explains clearly when claude is not installed', async () => {
   const result = await runFocusWithoutTerminal({ FOCUS_CLAUDE_BIN: 'definitely-not-claude', PATH: '/nonexistent' });
   assert.equal(result.code, 127);
   assert.match(result.stderr, /could not find `claude`/);
+});
+
+const CTRL_RIGHT_BRACKET = '\x1d';
+const ENTER_ALT_SCREEN = '\x1b[?1049h';
+
+test('Ctrl-] switches to the focus view and back', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h[\s\S]*focus/);
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049l/);
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('keys typed in the focus view never reach claude', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h/);
+  focus.terminal.write('meant for the quiz\r');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049l/);
+  focus.terminal.write('meant for claude\r');
+  assert.equal((await focus.nextReport('line')).line, 'meant for claude');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('claude output produced while in the focus view appears after switching back', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write('later 150 written while away\r');
+  await focus.nextReport('line');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h/);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const sinceFocusOpened = () => focus.transcript().slice(focus.transcript().lastIndexOf(ENTER_ALT_SCREEN));
+  assert.doesNotMatch(sinceFocusOpened(), /"later"/, 'must not draw over the focus view');
+
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049l[\s\S]*"later"/);
+  assert.equal((await focus.nextReport('later')).text, 'written while away');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
 });
