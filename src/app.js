@@ -5,6 +5,7 @@ import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
 import { buildHookSettings } from './hook-settings.js';
+import { createHistory } from './history.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { buildRecap } from './recap.js';
 import { createScreen } from './screen.js';
@@ -28,7 +29,14 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     },
   });
 
-  const session = createFocusSession({ claudePath, redraw: () => screen.redrawFocus() });
+  const history = createHistory();
+  let sessionId = null;
+  const session = createFocusSession({
+    claudePath,
+    redraw: () => screen.redrawFocus(),
+    onAnswer: (entry, run) =>
+      history.append(entry, { cwd: process.cwd(), sessionId, files: [...new Set((run?.edits ?? []).map((edit) => edit.path))] }),
+  });
 
   const screen = createScreen({
     write,
@@ -85,6 +93,7 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
 
   eventServer.events.on('event', (event) => {
     debugLog('event', JSON.stringify(event).slice(0, 300));
+    sessionId = event.sessionId ?? sessionId;
     if (event.type === 'needs-input') lastNeedsInputMessage = event.message;
     session.agentEvent(event);
     policy.agentEvent(event);
