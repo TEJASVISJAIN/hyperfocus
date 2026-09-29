@@ -377,6 +377,8 @@ stateDiagram-v2
     Asking --> Locked: 1–4 on a prediction
     Locked --> Asking: any key (the prediction waits for Claude's next edit)
     Asking --> Asking: l (live view shown or hidden)
+    Thinking --> [*]: Enter or Esc (back to Claude, stays away until the next prompt)
+    Asking --> [*]: Esc (the question waits for next time)
     Feedback --> Asking: any key, more queued
     Feedback --> Thinking: any key, queue empty (engine asks for more)
     Asking --> Asking: new run (unanswered question carried over)

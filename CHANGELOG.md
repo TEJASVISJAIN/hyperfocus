@@ -11,6 +11,8 @@
   of Claude's own screen. Hidden by default; `"live": true` in the config starts with it open.
 - **Nothing about discarded changes comes back.** Each question and run remembers the lines its change
   added; if they are gone from the file, it is left out of everything below.
+- `Esc` goes back to Claude from the focus view, and so does `Enter` while it is still thinking of a
+  question: no need to remember `Ctrl-]` when your work is already done.
 - The "while you were away" card lists missed questions worth a look before you merge.
 - `hyperfocus --notes` prints the latest session as markdown for a PR description.
 - `hyperfocus --review` asks again the missed questions whose code is still there.

@@ -34,6 +34,8 @@ const MAX_PLAN_CELLS = 10;
  * - `onFollowUp({ question, chosen, ask, thread })` when the user asks their own follow-up;
  *   answer with `setFollowUpAnswer` or `setFollowUpFailed`
  * - `onBack()` / `onKeepGoing()` for the choice offered by `showFinished`
+ * - `onExit()` when the user asks to go back to Claude: Esc anywhere, or Enter while there is no
+ *   question yet
  *
  * The live panel (feed and peek) is hidden unless `live` is set or the user presses `l`: it is
  * there for those who want it, not noise on every question.
@@ -45,8 +47,9 @@ export function createFocusView({
   onFollowUp = undefined,
   onBack = undefined,
   onKeepGoing = undefined,
+  onExit = undefined,
   title = 'hyperfocus',
-  backHint = 'Ctrl-] back to Claude',
+  backHint = 'Esc back to Claude',
   idleText = 'Thinking of a question about this change…',
   spinner = true,
   summaryHeading = "What's happening",
@@ -234,8 +237,11 @@ export function createFocusView({
       }
       if (followUp.draft !== null) return handleDraftKey(key);
       if (key === 'l' && liveToggle) return void (liveShown = !liveShown);
+      if (key === ESC && onExit) return onExit();
 
       const question = current();
+      // Nothing to answer yet, and maybe nothing left to wait for: let the user leave simply.
+      if (!question && onExit && key === ENTER) return onExit();
       if (finished) {
         if (key === ENTER) return onBack?.();
         if (key === 'c') return keepGoing();
@@ -351,8 +357,11 @@ export function createFocusView({
   function renderQuestion(textWidth, threadShown) {
     const question = current();
     if (!question) {
-      const hint = liveToggle && !liveShown ? [INDENT + DIM + truncate('l shows what Claude is doing', textWidth) + RESET] : [];
-      return [INDENT + DIM + idleText + RESET, ...hint];
+      const hints = [
+        ...(onExit ? keyHints([['Enter or Esc', 'back to Claude']], textWidth) : []),
+        ...(liveToggle && !liveShown ? [INDENT + DIM + truncate('l shows what Claude is doing', textWidth) + RESET] : []),
+      ];
+      return [INDENT + DIM + idleText + RESET, ...(hints.length ? ['', ...hints] : [])];
     }
 
     const label = KIND_LABELS[question.kind] ?? '';
@@ -376,7 +385,8 @@ export function createFocusView({
 
     if (!feedback) {
       const liveHint = liveToggle ? ` · l ${liveShown ? 'hide live view' : 'live view'}` : '';
-      lines.push(INDENT + DIM + truncate(`press 1-${question.options.length} to answer · s to skip${liveHint}`, textWidth) + RESET);
+      const exitHint = onExit ? ' · Esc back to Claude' : '';
+      lines.push(INDENT + DIM + truncate(`press 1-${question.options.length} to answer · s to skip${liveHint}${exitHint}`, textWidth) + RESET);
       return lines;
     }
     if (question.kind === 'predict') {

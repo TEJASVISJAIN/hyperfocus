@@ -46,7 +46,16 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
       session.view.hideFinished();
       showRecapOrClaude('done');
     },
+    onExit: () => leaveFocus(),
   });
+
+  // The user chose Claude: like Ctrl-], the focus view stays away until their next prompt.
+  const leaveFocus = () => {
+    policy.manualToggle('claude');
+    session.view.hideRecap();
+    session.view.hideFinished();
+    screen.showClaude();
+  };
 
   const screen = createScreen({
     write,
@@ -65,11 +74,7 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
       const toView = screen.view === 'claude' ? 'focus' : 'claude';
       policy.manualToggle(toView);
       if (toView === 'focus') openFocus();
-      else {
-        session.view.hideRecap();
-        session.view.hideFinished();
-        screen.showClaude();
-      }
+      else leaveFocus();
     },
   });
 

@@ -27,7 +27,7 @@ test('the status line shows what the agent is doing and for how long', () => {
   const [statusLine] = lines(render());
   assert.match(statusLine, /editing src\/auth\.ts/);
   assert.match(statusLine, /1:14/);
-  assert.match(statusLine, /Ctrl-\]/);
+  assert.match(statusLine, /Esc back to Claude/);
 });
 
 test('while the first questions are being written, says so and shows the summary', () => {

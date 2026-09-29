@@ -158,12 +158,25 @@ test('Ctrl-] switches to the focus view and back', async () => {
   await focus.exited;
 });
 
+test('Esc in the focus view goes back to Claude, and keys reach Claude again', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h[\s\S]*Enter or Esc/);
+  focus.terminal.write('\x1b');
+  await focus.waitForScreen(/\x1b\[\?1049l/);
+  focus.terminal.write('after esc\r');
+  assert.equal((await focus.nextReport('line')).line, 'after esc');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
 test('keys typed in the focus view never reach claude', async () => {
   const focus = startFocus();
   await focus.nextReport('start');
   focus.terminal.write(CTRL_RIGHT_BRACKET);
   await focus.waitForScreen(/\x1b\[\?1049h/);
-  focus.terminal.write('meant for the quiz\r');
+  focus.terminal.write('meant for the quiz');
   focus.terminal.write(CTRL_RIGHT_BRACKET);
   await focus.waitForScreen(/\x1b\[\?1049l/);
   focus.terminal.write('meant for claude\r');

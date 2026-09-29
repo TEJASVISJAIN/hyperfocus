@@ -6,13 +6,15 @@ import { redactSecrets } from './redact.js';
 
 // Connects agent events to the activity log, the quiz engine and the focus view.
 // `redraw` is called whenever what the focus view shows may have changed; `onBack` when the user
-// asks to go back to Claude from the "Claude finished" prompt. `projectAccuracy` is how the user
+// asks to go back to Claude from the "Claude finished" prompt, `onExit` when they leave the focus view
+// with Esc (or Enter while no question is up). `projectAccuracy` is how the user
 // did in this project before, which sets how hard the first questions are.
 export function createFocusSession({
   claudePath,
   redraw,
   onAnswer = undefined,
   onBack = undefined,
+  onExit = undefined,
   config = DEFAULT_CONFIG,
   projectAccuracy = { answered: 0, correct: 0 },
 }) {
@@ -47,6 +49,7 @@ export function createFocusSession({
       askForMoreIfNeeded();
     },
     onBack: () => onBack?.(),
+    onExit: () => onExit?.(),
   });
 
   function askForMoreIfNeeded() {

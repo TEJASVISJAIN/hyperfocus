@@ -260,3 +260,60 @@ test('l works while waiting for the first question and after an answer, and is t
   assert.match(text(), /> l█/);
   assert.equal(answers.length, 1);
 });
+
+test('while it is thinking of a question, Enter or Esc go back to Claude, and the screen says so', () => {
+  for (const key of ['\r', '\x1b', '\x1b[27u', '\x1b[13u']) {
+    let exits = 0;
+    const { view, text } = setup({ onExit: () => exits++ });
+    assert.match(text(), /Enter or Esc\s+back to Claude/);
+    view.handleKey(key);
+    assert.equal(exits, 1, JSON.stringify(key));
+  }
+});
+
+test('Esc goes back to Claude from a question too, without answering or skipping it', () => {
+  let exits = 0;
+  const { view, answers, text } = setup({ onExit: () => exits++ });
+  view.addQuestions([why]);
+  assert.match(text(), /Esc back to Claude/);
+  view.handleKey('\x1b');
+  assert.equal(exits, 1);
+  assert.deepEqual(answers, []);
+  assert.match(text(), /Why retry refreshToken\?/, 'the question is still there next time');
+});
+
+test('Esc in a follow-up cancels the draft instead of leaving', () => {
+  let exits = 0;
+  const { view, text } = setup({ onExit: () => exits++ });
+  view.addQuestions([why]);
+  view.handleKey('2');
+  view.handleKey('f');
+  view.handleKey('\x1b');
+  assert.equal(exits, 0);
+  assert.match(text(), /f\s+ask a follow-up/);
+});
+
+test('other keys while idle do nothing, and without an exit callback (review mode) there is no hint', () => {
+  let exits = 0;
+  const idle = setup({ onExit: () => exits++ });
+  for (const key of 'q x 1s') idle.view.handleKey(key);
+  assert.equal(exits, 0, 'stray typing never throws the user out');
+  const { view, text } = setup();
+  view.handleKey('\r');
+  assert.doesNotMatch(text(), /Enter or Esc/);
+});
+
+test('every screen names the way out in the status bar', () => {
+  let exits = 0;
+  const { view, render } = setup({ onExit: () => exits++, onBack: () => {} });
+  const statusBar = () => lines(render())[0];
+  assert.match(statusBar(), /Esc back to Claude/, 'while thinking');
+  view.addQuestions([why, why]);
+  assert.match(statusBar(), /Esc back to Claude/, 'at a question');
+  view.handleKey('1');
+  assert.match(statusBar(), /Esc back to Claude/, 'after an answer');
+  view.showFinished({ reason: 'done', changedFiles: [], score: { answered: 1, correct: 0 } });
+  assert.match(statusBar(), /Esc back to Claude/, 'when Claude has finished');
+  view.handleKey('\x1b');
+  assert.equal(exits, 1, 'and Esc works there too');
+});

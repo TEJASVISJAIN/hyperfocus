@@ -8,7 +8,7 @@ what could break, which edge cases matter. As soon as Claude finishes or needs y
 switches back, with a recap of what you missed.
 
 ```
- ◑ hyperfocus · editing src/retry.ts · 0:14           Ctrl-] back to Claude
+ ◑ hyperfocus · editing src/retry.ts · 0:14              Esc back to Claude
 ────────────────────────────────────────────────────────────────────────────
   Plan 2/4 ▰▰▱▱ Adding backoff to the retry helper
 
@@ -26,7 +26,7 @@ Question 3 · spot the bug · score 2/2 · streak 2
   2) A maximum number of attempts
   3) Awaiting the sleep
 
-  press 1-3 to answer · s to skip · l live view
+  press 1-3 to answer · s to skip · l live view · Esc back to Claude
 ```
 
 ## Install
@@ -57,6 +57,8 @@ Windows isn't supported yet.
 | Key | Where | Does |
 | --- | --- | --- |
 | `Ctrl-]` | anywhere | switch between Claude and the focus view |
+| `Esc` | focus view | back to Claude (while typing a follow-up, it cancels the follow-up instead) |
+| `Enter` | while it's thinking of a question | back to Claude |
 | `1`–`4` or click | focus view | answer the question |
 | `s` | focus view | skip the question |
 | `l` | focus view | show or hide the live view: what Claude is doing right now |
@@ -107,7 +109,8 @@ was reverted or rewritten, so hyperfocus leaves it out.
     finished change until you go back with `Ctrl-]`.
   - Otherwise, if you were in the focus view for 15 seconds or more, or answered anything, a "while you
     were away" card shows first.
-- If you switch back to Claude yourself, hyperfocus stays out of the way until your next prompt.
+- If you switch back to Claude yourself (`Ctrl-]` or `Esc`), hyperfocus stays out of the way until your
+  next prompt.
 
 ## Options
 
