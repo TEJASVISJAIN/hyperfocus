@@ -83,3 +83,17 @@ test('activity before any prompt (e.g. a resumed session) still starts a run', (
   assert.equal(run.prompt, '');
   assert.deepEqual(run.reads, ['/elsewhere/x.ts']);
 });
+
+test('the idle reminder or a repeated Stop after a run finishes leaves that run in place', () => {
+  const log = replay(recordedPayloads);
+  replay(
+    [
+      { hook_event_name: 'Notification', session_id: 's1', message: 'Claude is waiting for your input' },
+      { hook_event_name: 'Stop', session_id: 's1' },
+    ],
+    log,
+  );
+  assert.equal(log.run.prompt, 'add retry to token refresh');
+  assert.equal(log.run.edits.length, 2);
+  assert.equal(log.previousRun, null);
+});

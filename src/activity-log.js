@@ -44,7 +44,11 @@ export function createActivityLog({ cwd = process.cwd() } = {}) {
 
     record(event) {
       if (event.type === 'busy') return void startRun(event.prompt);
-      const current = run && !run.finished ? run : startRun('');
+      const runIsOpen = run && !run.finished;
+      // Stop or the idle reminder with no open run carry no new work; starting a run for them
+      // would push the run the user just watched out of reach of the recap and history.
+      if (!runIsOpen && (event.type === 'done' || event.type === 'needs-input')) return;
+      const current = runIsOpen ? run : startRun('');
       switch (event.type) {
         case 'read': {
           const target = displayPath(event.target);
