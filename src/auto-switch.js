@@ -53,6 +53,13 @@ export function createAutoSwitch({ delayMs, typingGraceMs, auto = true, currentV
       lastTypedAt = Date.now();
     },
 
+    // Claude Code runs no Stop hook when the user interrupts, so the key press is our only signal.
+    userInterrupted() {
+      agentBusy = false;
+      clearTimeout(timer);
+      timer = null;
+    },
+
     manualToggle(toView) {
       if (toView !== 'claude') return;
       userChoseClaude = true;
@@ -61,3 +68,8 @@ export function createAutoSwitch({ delayMs, typingGraceMs, auto = true, currentV
     },
   };
 }
+
+// Esc and Ctrl-C, plain or in the kitty / modifyOtherKeys encodings Claude Code turns on.
+const INTERRUPT_KEY = /^(\x1b|\x03|\x1b\[27u|\x1b\[99;5u|\x1b\[27;5;99~)$/;
+
+export const isInterruptKey = (key) => INTERRUPT_KEY.test(key);

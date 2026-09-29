@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, mock, test } from 'node:test';
-import { createAutoSwitch } from '../src/auto-switch.js';
+import { createAutoSwitch, isInterruptKey } from '../src/auto-switch.js';
 
 beforeEach(() => mock.timers.enable({ apis: ['setTimeout', 'Date'] }));
 afterEach(() => mock.timers.reset());
@@ -127,4 +127,18 @@ test('tool activity while already busy does not push the deadline back', () => {
   policy.agentEvent({ type: 'read', sessionId: 's', target: 'b' });
   mock.timers.tick(4000);
   assert.deepEqual(calls, ['open focus'], 'activity while already busy must not push the deadline back');
+});
+
+test('interrupting Claude (Esc / Ctrl-C) counts as the agent stopping, since no Stop hook fires', () => {
+  const { policy, calls } = setup();
+  policy.agentEvent(busy);
+  mock.timers.tick(3000);
+  policy.userInterrupted();
+  mock.timers.tick(60_000);
+  assert.deepEqual(calls, []);
+});
+
+test('interrupt keys are recognised in every encoding Claude Code may turn on', () => {
+  for (const key of ['\x1b', '\x03', '\x1b[27u', '\x1b[99;5u', '\x1b[27;5;99~']) assert.equal(isInterruptKey(key), true, JSON.stringify(key));
+  for (const key of ['a', '\x1b[A', '\r', '\x1b[I']) assert.equal(isInterruptKey(key), false, JSON.stringify(key));
 });

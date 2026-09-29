@@ -1,5 +1,5 @@
 import { alertUser } from './alert.js';
-import { createAutoSwitch } from './auto-switch.js';
+import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
 import { focusDelayMs } from './cli-args.js';
 import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
@@ -106,8 +106,15 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   process.on('exit', () => screen.showClaude());
 
   const restoreTerminal = takeOverTerminal((chunk) => {
-    if (screen.view === 'claude') policy.userTyped();
-    screen.input(chunk.toString('utf8'));
+    const key = chunk.toString('utf8');
+    if (screen.view === 'claude') {
+      policy.userTyped();
+      if (isInterruptKey(key)) {
+        policy.userInterrupted();
+        session.userInterrupted();
+      }
+    }
+    screen.input(key);
   });
   stdout.on('resize', () => screen.resize(stdout.columns, stdout.rows));
 }

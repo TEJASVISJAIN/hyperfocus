@@ -40,6 +40,13 @@ export function createFocusSession({ claudePath, redraw, onAnswer = undefined })
       redraw();
     },
 
+    // The user stopped Claude: treat the run as over, since Claude Code sends no Stop hook for it.
+    userInterrupted() {
+      if (!log.run || log.run.finished) return;
+      log.record({ type: 'done', sessionId: '' });
+      engine.cancel();
+    },
+
     handleKey(key) {
       view.handleKey(key);
       redraw();
