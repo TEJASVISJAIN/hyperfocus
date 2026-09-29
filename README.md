@@ -32,7 +32,7 @@ You need **Node.js 22 or newer** and **[Claude Code](https://claude.com/claude-c
 logged in**. If you already use `claude`, you're set.
 
 ```sh
-npm install -g hyperfocus
+npm install -g @ddalus/hyperfocus
 hyperfocus                  # use it exactly like `claude`
 ```
 
