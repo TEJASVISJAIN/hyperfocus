@@ -161,7 +161,7 @@ test('on a short terminal the question wins over the feed and the peek', () => {
   view.setPeek(['⏺ working']);
   const screen = text(80, 14);
   assert.match(screen, /Why retry refreshToken\?/);
-  assert.match(screen, /press 1-3 to answer/);
+  assert.match(screen, /enter answer/);
   assert.doesNotMatch(screen, /Live|working/);
 });
 
@@ -182,7 +182,7 @@ const rowOf = (screen, pattern) => screen.split('\n').findIndex((line) => patter
 test('clicking an option answers it', () => {
   const { view, answers, text } = setup();
   view.addQuestions([why, why]);
-  const row = rowOf(text(), /2\) Token expiry races/);
+  const row = rowOf(text(), /2 {2}Token expiry races/);
   view.handleKey(click(8, row));
   assert.equal(answers[0].chosen, 1);
   assert.equal(answers[0].correct, true);
@@ -205,7 +205,7 @@ test('the title, back hint and empty text can be changed, for review mode', () =
   assert.match(screen, /hyperfocus review/);
   assert.match(screen, /q to quit/);
   assert.match(screen, /All caught up\./);
-  assert.match(screen, /^Review$/m);
+  assert.match(screen, /^ {2}Review$/m);
 });
 
 test('a line that merely looks like an option (in the peek or the summary) is not clickable', () => {
@@ -246,7 +246,7 @@ test('the live panel is hidden until the user asks for it with l', () => {
 test('l works while waiting for the first question and after an answer, and is text in a follow-up', () => {
   const { view, answers, text } = setup();
   view.setFeed([{ kind: 'command', text: 'npm test' }]);
-  assert.match(text(), /l shows what Claude is doing/);
+  assert.match(text(), /l see what Claude is doing/);
   view.handleKey('l');
   assert.match(text(), /\$ npm test/);
   view.handleKey('l');
@@ -257,7 +257,7 @@ test('l works while waiting for the first question and after an answer, and is t
   assert.match(text(), /\$ npm test/);
   view.handleKey('f');
   view.handleKey('l');
-  assert.match(text(), /> l█/);
+  assert.match(text(), /› l█/);
   assert.equal(answers.length, 1);
 });
 
@@ -265,7 +265,7 @@ test('while it is thinking of a question, Enter or Esc go back to Claude, and th
   for (const key of ['\r', '\x1b', '\x1b[27u', '\x1b[13u']) {
     let exits = 0;
     const { view, text } = setup({ onExit: () => exits++ });
-    assert.match(text(), /Enter or Esc\s+back to Claude/);
+    assert.match(text(), /enter or esc\s+back to Claude/);
     view.handleKey(key);
     assert.equal(exits, 1, JSON.stringify(key));
   }
@@ -300,7 +300,7 @@ test('other keys while idle do nothing, and without an exit callback (review mod
   assert.equal(exits, 0, 'stray typing never throws the user out');
   const { view, text } = setup();
   view.handleKey('\r');
-  assert.doesNotMatch(text(), /Enter or Esc/);
+  assert.doesNotMatch(text(), /enter or esc/);
 });
 
 test('every screen names the way out in the status bar', () => {

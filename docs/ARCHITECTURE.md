@@ -367,7 +367,7 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> Thinking: no question queued
     Thinking --> Asking: batch arrives
-    Asking --> Feedback: 1–4 (answer recorded)
+    Asking --> Feedback: 1–4, a click, or Enter on the option chosen with ↑↓ (answer recorded)
     Asking --> Asking: s (skip, recorded) and more queued
     Asking --> Thinking: s and queue empty
     Feedback --> Typing: f

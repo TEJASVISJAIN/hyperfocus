@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createScreen, peekLines } from '../src/screen.js';
+import { KEYS, createScreen, peekLines } from '../src/screen.js';
+
+test('keys are split one per piece, arrows in either cursor mode staying whole', () => {
+  assert.deepEqual('a\x1b[B\x1bOAj\r'.match(KEYS), ['a', '\x1b[B', '\x1bOA', 'j', '\r']);
+});
 
 const rule = '─'.repeat(100);
 const claudeScreen = [

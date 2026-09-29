@@ -6,7 +6,10 @@
   (checked against it), and prediction questions ("which file will Claude edit next?") are settled by
   Claude's next edit.
 - Answer options are shuffled, and questions get harder or easier with your recent accuracy.
-- The focus view shows Claude's plan from its task list, plus a spinner, streaks and clickable options.
+- The question screen is a card: the question, any code excerpt and the options in a rounded box, a
+  dot per answer this run on its title bar, and one row of key hints underneath. Choose with ↑/↓ (or
+  j/k) and Enter, a number, or a click. The recap is a matching card.
+- Claude's plan from its task list shows under the status bar, plus a spinner and streaks.
 - `l` opens the live view: a feed of reads, edits, commands and subagents, and a peek at the last lines
   of Claude's own screen. Hidden by default; `"live": true` in the config starts with it open.
 - **Nothing about discarded changes comes back.** Each question and run remembers the lines its change

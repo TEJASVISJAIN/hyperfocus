@@ -162,7 +162,7 @@ test('Esc in the focus view goes back to Claude, and keys reach Claude again', a
   const focus = startFocus();
   await focus.nextReport('start');
   focus.terminal.write(CTRL_RIGHT_BRACKET);
-  await focus.waitForScreen(/\x1b\[\?1049h[\s\S]*Enter or Esc/);
+  await focus.waitForScreen(/\x1b\[\?1049h[\s\S]*enter or esc/);
   focus.terminal.write('\x1b');
   await focus.waitForScreen(/\x1b\[\?1049l/);
   focus.terminal.write('after esc\r');
@@ -311,7 +311,7 @@ test('when Claude finishes mid-question, the quiz stays up and Enter goes back',
   const whileFinished = await focus.userScreen();
   assert.equal(whileFinished.type, 'alternate', 'still on the quiz');
   assert.match(whileFinished.text, /Why retry refreshToken\?/);
-  assert.match(whileFinished.text, /Enter\s+back to Claude/);
+  assert.match(whileFinished.text, /enter\s+back to Claude/);
 
   focus.terminal.write('\r');
   await pause(300);

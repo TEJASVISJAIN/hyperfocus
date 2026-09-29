@@ -1,6 +1,6 @@
 import { changedFiles } from './activity-log.js';
 import { isStillInCode } from './code-anchors.js';
-import { BOLD, DIM, INDENT, RESET } from './styles.js';
+import { BOLD, DIM, RESET, YELLOW } from './styles.js';
 import { truncate, wrap } from './text-layout.js';
 
 const MIN_VISIBLE_MS_FOR_RECAP = 15_000;
@@ -39,27 +39,25 @@ export function buildRecap({ run, summary, score, visibleMs, answeredThisVisit, 
   };
 }
 
-export function renderRecap(recap, { cols }) {
-  const textWidth = Math.max(10, cols - INDENT.length * 2);
+/** The recap as a card: its title, a detail for the title bar, and the body lines (no indent). */
+export function renderRecap(recap, { width }) {
   const { changedFiles: files, score } = recap;
-  const heading = recap.reason === 'done' ? 'Claude finished' : 'Claude needs your input';
+  const lines = [];
+  if (recap.summary) lines.push(...wrap(recap.summary, width), '');
 
-  const lines = [`${BOLD}While you were away${RESET}${DIM} · ${heading}${RESET}`, ''];
-  if (recap.summary) lines.push(...wrap(recap.summary, textWidth).map((line) => INDENT + line), '');
+  lines.push(BOLD + (files.length ? `${files.length} file${files.length === 1 ? '' : 's'} changed` : 'No files changed') + RESET);
+  for (const path of files.slice(0, MAX_FILES_LISTED)) lines.push(DIM + '  ' + truncate(path, width - 2) + RESET);
+  if (files.length > MAX_FILES_LISTED) lines.push(DIM + `  … and ${files.length - MAX_FILES_LISTED} more` + RESET);
 
-  lines.push(INDENT + (files.length ? `${files.length} file${files.length === 1 ? '' : 's'} changed` : 'No files changed'));
-  for (const path of files.slice(0, MAX_FILES_LISTED)) lines.push(INDENT + DIM + '  ' + truncate(path, textWidth - 2) + RESET);
-  if (files.length > MAX_FILES_LISTED) lines.push(INDENT + DIM + `  … and ${files.length - MAX_FILES_LISTED} more` + RESET);
-
-  if (score.answered) lines.push('', INDENT + `Quiz: ${score.correct}/${score.answered} correct`);
+  if (score.answered) lines.push('', `Quiz: ${score.correct}/${score.answered} correct`);
   if (recap.checklist?.length) {
-    lines.push('', INDENT + BOLD + 'Worth a look before you merge' + RESET);
-    const fileWidth = Math.min(Math.max(...recap.checklist.map((item) => item.file.length)), Math.floor(textWidth / 2));
+    lines.push('', YELLOW + BOLD + 'Worth a look before you merge' + RESET);
+    const fileWidth = Math.min(Math.max(...recap.checklist.map((item) => item.file.length)), Math.floor(width / 2));
     for (const { file, question } of recap.checklist) {
       const label = truncate(file, fileWidth).padEnd(fileWidth);
-      lines.push(INDENT + '  ' + DIM + label + RESET + '  ' + truncate(question, Math.max(4, textWidth - fileWidth - 4)));
+      lines.push('  ' + DIM + label + RESET + '  ' + truncate(question, Math.max(4, width - fileWidth - 4)));
     }
   }
-  lines.push('', INDENT + DIM + 'press any key to go back to Claude' + RESET);
-  return lines;
+  const detail = DIM + (recap.reason === 'done' ? 'Claude finished' : 'Claude needs your input') + RESET;
+  return { title: BOLD + 'While you were away' + RESET, detail, lines };
 }

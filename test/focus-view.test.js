@@ -42,10 +42,12 @@ test('a question shows numbered options and how to answer', () => {
   view.addQuestions([retryQuestion]);
   const text = screenText(render());
   assert.match(text, /Why retry refreshToken\?/);
-  assert.match(text, /1\) Rate limits/);
-  assert.match(text, /2\) Token expiry races/);
-  assert.match(text, /3\) Caching/);
-  assert.match(text, /1-3 to answer/);
+  assert.match(text, /▸ 1 {2}Rate limits/, 'the first option starts selected');
+  assert.match(text, / {3}2 {2}Token expiry races/);
+  assert.match(text, / {3}3 {2}Caching/);
+  assert.match(text, /↑↓ choose\s+enter answer\s+s skip/);
+  assert.match(text, /╭─ Question 1 ─+╮/, 'in a card');
+  assert.match(text, /╰─+╯/);
 });
 
 test('a right answer is confirmed with the explanation', () => {
@@ -63,8 +65,9 @@ test('a wrong answer shows the right one', () => {
   view.addQuestions([retryQuestion]);
   view.handleKey('1');
   const text = screenText(render());
-  assert.match(text, /✘/);
-  assert.match(text, /2\) Token expiry races/);
+  assert.match(text, /✘ 1 {2}Rate limits/);
+  assert.match(text, /✔ 2 {2}Token expiry races/);
+  assert.match(text, /the answer is 2/);
   assert.equal(answers[0].correct, false);
 });
 
@@ -75,7 +78,7 @@ test('any key after the explanation moves on and the score keeps count', () => {
   view.handleKey('x');
   const text = screenText(render());
   assert.match(text, /How many attempts\?/);
-  assert.match(text, /score 1\/1/);
+  assert.match(text, /Question 2 ─+ ● 1\/1 ─╮/, 'the score and a dot per answer sit on the card');
   assert.equal(view.queuedQuestions, 1);
 });
 
@@ -90,10 +93,9 @@ test('s skips a question', () => {
 test('keys that are not an option are ignored', () => {
   const { view, answers, render } = setup();
   view.addQuestions([retryQuestion]);
-  view.handleKey('9');
-  view.handleKey('\r');
+  for (const key of ['9', '0', 'x', '\x1b[C', '\x1b[D']) view.handleKey(key);
   assert.deepEqual(answers, []);
-  assert.match(screenText(render()), /1-3 to answer/);
+  assert.match(screenText(render()), /enter answer/);
 });
 
 test('long text wraps to the terminal width and never overflows it', () => {
@@ -131,16 +133,52 @@ test('the explanation stays under the number of the question it explains', () =>
   const { view, render } = setup();
   view.addQuestions([retryQuestion, attemptsQuestion]);
   view.handleKey('1');
-  assert.match(screenText(render()), /Question 1 · score 0\/1/);
+  assert.match(screenText(render()), /Question 1 ─+ ● 0\/1 ─╮/);
   view.handleKey('x');
-  assert.match(screenText(render()), /Question 2 · score 0\/1/);
+  assert.match(screenText(render()), /Question 2 ─+ ● 0\/1 ─╮/);
 });
 
-test('a trimmed summary still leaves a gap before the question', () => {
+test('the summary sits under the card and is trimmed first, keeping its gap and the whole card', () => {
   const { view, render } = setup();
   view.setSummary('word '.repeat(200));
   view.addQuestions([retryQuestion]);
-  const rendered = lines(render(60, 16));
-  const questionHeading = rendered.findIndex((line) => line.startsWith('Question 1'));
-  assert.equal(rendered[questionHeading - 1], '');
+  const rendered = lines(render(60, 17));
+  const heading = rendered.findIndex((line) => line.trim() === "What's happening");
+  assert.ok(heading > rendered.findIndex((line) => line.includes('╰')), 'below the card');
+  assert.equal(rendered[heading - 1], '');
+  assert.ok(rendered.some((line) => line.includes('enter answer')), 'the key hints survive');
+  assert.equal(rendered.length, 17);
+});
+
+test('arrow keys (normal or application mode) and j/k choose, Enter answers the chosen option', () => {
+  const { view, answers, render } = setup();
+  view.addQuestions([retryQuestion, retryQuestion]);
+  view.handleKey('\x1b[B');
+  assert.match(screenText(render()), /▸ 2 {2}Token expiry races/);
+  view.handleKey('\x1b[A');
+  view.handleKey('\x1b[A');
+  assert.match(screenText(render()), /▸ 3 {2}Caching/, 'up from the first wraps to the last');
+  view.handleKey('\x1bOB');
+  view.handleKey('j');
+  view.handleKey('k');
+  assert.match(screenText(render()), /▸ 1 {2}Rate limits/);
+  view.handleKey('j');
+  view.handleKey('\r');
+  assert.equal(answers[0].chosen, 1);
+  assert.equal(answers[0].correct, true);
+  view.handleKey('x');
+  assert.match(screenText(render()), /▸ 1 {2}Rate limits/, 'the next question starts at the top again');
+});
+
+test('the card shows a dot per answer this run: right, wrong and skipped', () => {
+  const { view, render } = setup();
+  view.addQuestions([retryQuestion, retryQuestion, retryQuestion, retryQuestion]);
+  view.handleKey('2');
+  view.handleKey('x');
+  view.handleKey('1');
+  view.handleKey('x');
+  view.handleKey('s');
+  const rendered = render();
+  assert.match(screenText(rendered), /●●○ 1\/2 ─╮/);
+  assert.match(rendered, /\x1b\[32m●.*\x1b\[31m●.*\x1b\[2m○/, 'green, red, then dim');
 });

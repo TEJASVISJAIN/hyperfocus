@@ -21,6 +21,10 @@ const PEEK_GUTTER = '│ ';
 const MAX_FEED_STEPS = 4;
 const MAX_PEEK_LINES = 4;
 const RESULT_SHOWN_MS = 10_000;
+const MAX_CARD_WIDTH = 84;
+const MAX_DOTS = 10;
+const UP_KEYS = new Set(['\x1b[A', '\x1bOA', 'k']);
+const DOWN_KEYS = new Set(['\x1b[B', '\x1bOB', 'j']);
 const MAX_PLAN_CELLS = 10;
 
 /**
@@ -66,6 +70,9 @@ export function createFocusView({
   let answered = 0;
   let correct = 0;
   let streak = 0;
+  let results = []; // 'right' | 'wrong' | 'skip' for this run, drawn as dots on the card
+  let selected = 0; // the option the arrow keys point at
+  let selectedFor = null;
   let recap = null; // { card, onDismiss } while the "while you were away" card is up
   let finished = null; // { reason, changedFiles, score } while offering "back to Claude or keep going"
   let pendingPredictions = []; // { question, chosen } waiting for Claude's next edit
@@ -78,7 +85,23 @@ export function createFocusView({
 
   const current = () => queue[0];
 
+  // A new question on screen starts with its first option selected.
+  function syncSelection() {
+    if (selectedFor === current()) return;
+    selectedFor = current();
+    selected = 0;
+  }
+
+  function answer(question, chosen) {
+    feedback = { question, chosen };
+    if (question.kind === 'predict') return void pendingPredictions.push({ question, chosen });
+    const isCorrect = chosen === question.answer;
+    score(isCorrect);
+    onAnswer({ question, chosen, correct: isCorrect, skipped: false });
+  }
+
   function next() {
+    selectedFor = null; // the next question starts at its first option, even if it is the same object
     feedback = null;
     followUp = emptyFollowUp();
     queue.shift();
@@ -91,6 +114,7 @@ export function createFocusView({
   }
 
   function score(isCorrect) {
+    results.push(isCorrect ? 'right' : 'wrong');
     answered++;
     if (isCorrect) {
       correct++;
@@ -192,6 +216,7 @@ export function createFocusView({
       answered = 0;
       correct = 0;
       streak = 0;
+      results = [];
       feed = [];
       activity = 'thinking';
       activityStartedAt = startedAt;
@@ -226,10 +251,12 @@ export function createFocusView({
       const mouse = rawKey.match(MOUSE_REPORT);
       if (mouse) return handleClick(mouse);
       clickRows = new Map(); // the screen is about to change: rows are known again after the next render
+      syncSelection();
       const key = KITTY_KEYS[rawKey] ?? rawKey;
+      const arrow = UP_KEYS.has(key) ? -1 : DOWN_KEYS.has(key) ? 1 : 0;
       // Other escape sequences here are terminal reports (focus in/out, paste markers) or
       // keys we don't use, never a deliberate "any key".
-      if (key.length > 1 && key.startsWith(ESC)) return;
+      if (!arrow && key.length > 1 && key.startsWith(ESC)) return;
       if (recap) {
         const { onDismiss } = recap;
         recap = null;
@@ -245,8 +272,8 @@ export function createFocusView({
       if (finished) {
         if (key === ENTER) return onBack?.();
         if (key === 'c') return keepGoing();
-        // Answering or skipping the question on screen is choosing to keep going too.
-        const answersQuestion = question && !feedback && (key === 's' || /^[1-9]$/.test(key));
+        // Choosing or answering the question on screen is choosing to keep going too.
+        const answersQuestion = question && !feedback && (arrow || key === 's' || /^[1-9]$/.test(key));
         if (!answersQuestion) return;
         keepGoing();
       }
@@ -256,47 +283,54 @@ export function createFocusView({
         if (key === 'f' && followUp.pendingAsk === null) return void (followUp.draft = '');
         return next();
       }
+      if (arrow) return void (selected = (selected + arrow + question.options.length) % question.options.length);
+      if (key === ENTER) return answer(question, selected);
       if (key === 's') {
+        results.push('skip');
         onAnswer({ question, chosen: null, correct: null, skipped: true });
         return next();
       }
       const chosen = Number(key) - 1;
       if (!/^[1-9]$/.test(key) || chosen >= question.options.length) return;
-      feedback = { question, chosen };
-      if (question.kind === 'predict') return void pendingPredictions.push({ question, chosen });
-      const isCorrect = chosen === question.answer;
-      score(isCorrect);
-      onAnswer({ question, chosen, correct: isCorrect, skipped: false });
+      answer(question, chosen);
     },
 
     render({ cols, rows, now = Date.now() }) {
-      const textWidth = Math.max(10, cols - INDENT.length * 2);
-      const header = [statusLine(cols, now), DIM + '─'.repeat(cols) + RESET, ...planLine(textWidth), ...resultLine(textWidth, now), ''];
-      if (recap) return finish([...header, ...renderRecap(recap.card, { cols })].slice(0, rows));
+      syncSelection();
+      const margin = cols >= 30 ? INDENT : '';
+      const cardWidth = Math.max(12, Math.min(cols - margin.length * 2, MAX_CARD_WIDTH));
+      const inner = Math.max(6, cardWidth - 6);
+      const box = { margin, cardWidth, inner };
+      const header = [statusLine(cols, now), ...planLine(cols - 2), ...resultLine(cols - 2, now), ''];
 
-      const summaryBlock = [
-        DIM + summaryHeading + RESET,
-        ...(summary ? wrap(summary, textWidth) : ['Watching the agent…']).map((line) => INDENT + line),
-        '',
-      ];
-      // A long follow-up thread drops its oldest exchanges first, so the latest answer stays visible.
-      let threadShown = followUp.thread.length;
-      let questionBlock = [...renderFinished(textWidth), ...renderQuestion(textWidth, threadShown)];
-      while (threadShown > 0 && header.length + questionBlock.length > rows) {
-        threadShown--;
-        questionBlock = [...renderFinished(textWidth), ...renderQuestion(textWidth, threadShown)];
+      if (recap) {
+        const { title: recapTitle, detail, lines: body } = renderRecap(recap.card, { width: inner });
+        const screen = [...header, ...card(box, recapTitle, detail, body), ...hintRow([['any key', 'back to Claude']], cols, margin)];
+        return finish(screen.slice(0, rows));
       }
 
-      // The question matters most, then the summary, then the live feed, then the peek.
-      let room = Math.max(0, rows - header.length - questionBlock.length);
-      const fittedSummary = room >= summaryBlock.length ? summaryBlock : room > 1 ? [...summaryBlock.slice(0, room - 1), ''] : [];
+      // A long follow-up thread drops its oldest exchanges first, so the latest answer stays visible.
+      let threadShown = followUp.thread.length;
+      const main = () => [...renderFinished(box, cols), ...renderQuestion(box, threadShown), ...hintRow(currentHints(), cols, margin)];
+      let mainBlock = main();
+      while (threadShown > 0 && header.length + mainBlock.length > rows) {
+        threadShown--;
+        mainBlock = main();
+      }
+
+      // The question card matters most, then the summary, then the live view.
+      const textWidth = cols - margin.length * 2;
+      let room = Math.max(0, rows - header.length - mainBlock.length);
+      const summaryLines = (summary ? wrap(summary, textWidth) : ['Watching the agent…']).map((line) => margin + line);
+      const summaryBlock = ['', margin + DIM + summaryHeading + RESET, ...summaryLines];
+      const fittedSummary = room >= summaryBlock.length ? summaryBlock : room >= 3 ? summaryBlock.slice(0, room) : [];
       room -= fittedSummary.length;
-      const feedBlock = !liveShown ? [] : fitSection('Live', feed.slice(-MAX_FEED_STEPS).map((step) => feedLine(step, textWidth)), room, cols);
+      const feedBlock = !liveShown ? [] : fitSection('Live', feed.slice(-MAX_FEED_STEPS).map((step) => feedLine(step, textWidth, margin)), room, cols);
       room -= feedBlock.length;
-      const peekLine = (line) => INDENT + CYAN + PEEK_GUTTER + RESET + truncate(line, textWidth - PEEK_GUTTER.length);
+      const peekLine = (line) => margin + CYAN + PEEK_GUTTER + RESET + truncate(line, textWidth - PEEK_GUTTER.length);
       const peekBlock = !liveShown ? [] : fitSection('Claude', peek.slice(-MAX_PEEK_LINES).map(peekLine), room, cols);
 
-      return finish([...header, ...fittedSummary, ...questionBlock, ...feedBlock, ...peekBlock].slice(0, rows));
+      return finish([...header, ...mainBlock, ...fittedSummary, ...feedBlock, ...peekBlock].slice(0, rows));
     },
   };
   return view;
@@ -319,27 +353,40 @@ export function createFocusView({
     const frame = !spinner || IDLE_ACTIVITIES.has(activity) ? '' : `${SPINNER[Math.floor(now / 1000) % SPINNER.length]} `;
     const left = ` ${frame}${title} · ${activity} · ${formatElapsed(now - activityStartedAt)} `;
     const room = cols - widthOf(hint);
-    const fitted = room >= 12 ? truncate(left, room) : truncate(left, cols);
+    const fitted = room >= 12 ? truncate(left, room - 1) : truncate(left, cols);
     const padding = ' '.repeat(Math.max(0, cols - widthOf(fitted) - (room >= 12 ? widthOf(hint) : 0)));
     return INVERSE + fitted + padding + (room >= 12 ? hint : '') + RESET;
   }
 
-  function planLine(textWidth) {
+  function planLine(width) {
     if (!progress) return [];
     const cells = Math.min(progress.total, MAX_PLAN_CELLS);
     const filled = Math.round((progress.done / progress.total) * cells);
-    const bar = '▰'.repeat(filled) + '▱'.repeat(cells - filled);
-    const text = `Plan ${progress.done}/${progress.total} ${bar}${progress.current ? ` ${progress.current}` : ''}`;
-    return [INDENT + DIM + truncate(text, textWidth) + RESET];
+    const bar = CYAN + '▰'.repeat(filled) + RESET + DIM + '▱'.repeat(cells - filled) + RESET;
+    const label = `Plan ${progress.done}/${progress.total} `;
+    const current = progress.current ? ' ' + truncate(progress.current, Math.max(0, width - label.length - cells - 1)) : '';
+    return [' ' + DIM + label + RESET + bar + current];
   }
 
-  function resultLine(textWidth, now) {
+  function resultLine(width, now) {
     if (!result || now - result.at >= RESULT_SHOWN_MS) return [];
     const style = result.good === true ? GREEN : result.good === false ? RED : DIM;
-    return [INDENT + style + truncate(result.text, textWidth) + RESET];
+    return [' ' + style + truncate(result.text, width) + RESET];
   }
 
-  function renderFinished(textWidth) {
+  // Keys that do something right now, as one row under the card.
+  function currentHints() {
+    const live = liveToggle ? [['l', liveShown ? 'hide live view' : 'live view']] : [];
+    const back = onExit ? [['esc', 'back to Claude']] : [];
+    const question = current();
+    if (!question) return [...(onExit ? [['enter or esc', 'back to Claude']] : []), ...(liveToggle && !liveShown ? [['l', 'see what Claude is doing']] : live)];
+    if (followUp.draft !== null) return [['enter', 'ask'], ['esc', 'cancel']];
+    if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ...live, ...back];
+    if (followUp.pendingAsk !== null) return [['any key', 'next question'], ...back];
+    return [['f', 'ask a follow-up'], ['any key', 'next question'], ...live, ...back];
+  }
+
+  function renderFinished({ margin, inner }, cols) {
     if (!finished || !current()) return [];
     const files = finished.changedFiles.length;
     const headline = [
@@ -348,114 +395,127 @@ export function createFocusView({
       ...(finished.score.answered ? [`quiz ${finished.score.correct}/${finished.score.answered}`] : []),
     ].join(' · ');
     return [
-      INDENT + GREEN + BOLD + '✔ ' + truncate(headline, textWidth - 2) + RESET,
-      ...keyHints([['Enter', 'back to Claude'], ['c', 'keep going']], textWidth),
+      margin + GREEN + BOLD + '✔ ' + truncate(headline, Math.max(4, inner)) + RESET,
+      ...hintRow([['enter', 'back to Claude'], ['c', 'keep going']], cols, margin),
       '',
     ];
   }
 
-  function renderQuestion(textWidth, threadShown) {
+  function renderQuestion(box, threadShown) {
+    const { margin, inner } = box;
     const question = current();
-    if (!question) {
-      const hints = [
-        ...(onExit ? keyHints([['Enter or Esc', 'back to Claude']], textWidth) : []),
-        ...(liveToggle && !liveShown ? [INDENT + DIM + truncate('l shows what Claude is doing', textWidth) + RESET] : []),
-      ];
-      return [INDENT + DIM + idleText + RESET, ...(hints.length ? ['', ...hints] : [])];
-    }
+    if (!question) return [margin + DIM + idleText + RESET, ''];
 
     const label = KIND_LABELS[question.kind] ?? '';
-    const scoreText = [answered ? `score ${correct}/${answered}` : '', streak >= 2 ? `streak ${streak}` : ''].filter(Boolean).join(' · ');
-    const heading = truncate([`Question ${seen + 1}`, label].filter(Boolean).join(' · '), textWidth + INDENT.length * 2);
-    const lines = [
-      `${BOLD}${heading}${RESET}${DIM}${scoreText ? truncate(` · ${scoreText}`, Math.max(0, textWidth + 4 - widthOf(heading))) : ''}${RESET}`,
-      ...wrap(question.q, textWidth).map((line) => INDENT + BOLD + line + RESET),
-      '',
-      ...renderCode(question, textWidth),
-    ];
+    const heading = BOLD + `Question ${seen + 1}` + RESET + (label ? DIM + ' · ' + RESET + CYAN + label + RESET : '');
+    const body = [...wrap(question.q, inner).map((line) => BOLD + line + RESET), '', ...renderCode(question, inner)];
+
     question.options.forEach((option, index) => {
-      const number = `${index + 1}) `;
-      const [first, ...rest] = wrap(option, textWidth - number.length);
-      const style = feedback ? optionStyle(index) : '';
+      const [bullet, style] = optionLook(question, index);
+      const number = `${index + 1}  `;
+      const [first, ...rest] = wrap(option, inner - 2 - number.length);
       const mark = OPTION_MARK + String(index + 1);
-      lines.push(mark + INDENT + style + number + first + RESET);
-      for (const line of rest) lines.push(mark + INDENT + style + ' '.repeat(number.length) + line + RESET);
+      body.push(mark + bullet + style + number + first + RESET);
+      for (const line of rest) body.push(mark + '  ' + style + ' '.repeat(number.length) + line + RESET);
     });
-    lines.push('');
 
-    if (!feedback) {
-      const liveHint = liveToggle ? ` · l ${liveShown ? 'hide live view' : 'live view'}` : '';
-      const exitHint = onExit ? ' · Esc back to Claude' : '';
-      lines.push(INDENT + DIM + truncate(`press 1-${question.options.length} to answer · s to skip${liveHint}${exitHint}`, textWidth) + RESET);
-      return lines;
+    if (feedback) {
+      body.push('');
+      if (question.kind === 'predict') {
+        body.push(...wrap(`Locked in: ${question.options[feedback.chosen]}. The next file Claude edits settles it.`, inner));
+      } else {
+        const wasRight = feedback.chosen === question.answer;
+        body.push(wasRight ? GREEN + BOLD + '✔ Correct' + RESET : RED + BOLD + '✘ Not quite' + RESET + DIM + ` · the answer is ${question.answer + 1}` + RESET);
+        body.push(...wrap(question.why, inner));
+      }
+      body.push(...renderFollowUps(inner, threadShown));
     }
-    if (question.kind === 'predict') {
-      lines.push(
-        ...wrap(`Locked in: ${question.options[feedback.chosen]}. The next file Claude edits settles it.`, textWidth).map((line) => INDENT + line),
-        '',
-        ...renderFollowUps(textWidth, threadShown),
-      );
-      return lines;
-    }
-    const wasRight = feedback.chosen === question.answer;
-    lines.push(
-      INDENT +
-        (wasRight
-          ? `${GREEN}✔ Correct${RESET}`
-          : `${RED}✘ Not quite${RESET} · answer: ${question.answer + 1}) ${truncate(question.options[question.answer], textWidth - 26)}`),
-      ...wrap(question.why, textWidth).map((line) => INDENT + line),
-      '',
-      ...renderFollowUps(textWidth, threadShown),
-    );
-    return lines;
-
-    function optionStyle(index) {
-      if (question.kind === 'predict') return index === feedback.chosen ? BOLD : DIM;
-      if (index === question.answer) return GREEN;
-      if (index === feedback.chosen) return RED;
-      return DIM;
-    }
+    return card(box, heading, scoreDetail(), body);
   }
 
-  function renderCode(question, textWidth) {
+  function optionLook(question, index) {
+    if (!feedback) return index === selected ? [CYAN + BOLD + '▸ ', CYAN + BOLD] : ['  ', ''];
+    if (question.kind === 'predict') return index === feedback.chosen ? [BOLD + '● ', BOLD] : ['  ', DIM];
+    if (index === question.answer) return [GREEN + BOLD + '✔ ' + RESET, GREEN];
+    if (index === feedback.chosen) return [RED + BOLD + '✘ ' + RESET, RED];
+    return ['  ', DIM];
+  }
+
+  // "●●○ 2/3 · streak 2": this run's answers as dots, then the score.
+  function scoreDetail() {
+    if (results.length === 0) return '';
+    const dots = results.slice(-MAX_DOTS).map((outcome) => (outcome === 'right' ? GREEN + '●' : outcome === 'wrong' ? RED + '●' : DIM + '○') + RESET).join('');
+    return dots + DIM + ` ${correct}/${answered}` + (streak >= 2 ? ` · streak ${streak}` : '') + RESET;
+  }
+
+  function renderCode(question, inner) {
     if (!question.code) return [];
     const marks = question.codeMarks ?? [];
     const codeLines = question.code.split('\n').map((line, index) => {
       const mark = marks[index] === '+' || marks[index] === '-' ? marks[index] : ' ';
       const style = mark === '+' ? GREEN : mark === '-' ? RED : DIM;
-      return INDENT + INDENT + style + truncate(`${mark} ${line}`, textWidth - INDENT.length) + RESET;
+      return '  ' + style + truncate(`${mark} ${line}`, inner - 2) + RESET;
     });
     return [...codeLines, ''];
   }
 
-  function renderFollowUps(textWidth, threadShown) {
-    const asked = (ask) => wrap(`> ${ask}`, textWidth).map((line) => INDENT + BOLD + line + RESET);
+  function renderFollowUps(inner, threadShown) {
+    const asked = (ask) => wrap(`› ${ask}`, inner).map((line) => CYAN + BOLD + line + RESET);
     const lines = [];
     for (const { ask, answer } of followUp.thread.slice(followUp.thread.length - threadShown)) {
-      lines.push(...asked(ask), ...wrap(answer, textWidth).map((line) => INDENT + line), '');
+      lines.push('', ...asked(ask), ...wrap(answer, inner));
     }
-    if (followUp.pendingAsk !== null) {
-      lines.push(...asked(followUp.pendingAsk), INDENT + DIM + 'Thinking…' + RESET, '');
-    }
-    if (followUp.failed) lines.push(...wrap("Couldn't get an answer. Press f to try again.", textWidth).map((line) => INDENT + RED + line + RESET), '');
-
-    if (followUp.draft !== null) {
-      lines.push(...wrap(`> ${followUp.draft}█`, textWidth).map((line) => INDENT + line), '');
-      lines.push(INDENT + DIM + truncate('Enter to ask · Esc to cancel', textWidth) + RESET);
-    } else if (followUp.pendingAsk === null) {
-      lines.push(...keyHints([['f', 'ask a follow-up'], ['any key', 'next question']], textWidth, 1));
-    }
+    if (followUp.pendingAsk !== null) lines.push('', ...asked(followUp.pendingAsk), DIM + 'Thinking…' + RESET);
+    if (followUp.failed) lines.push('', ...wrap("Couldn't get an answer. Press f to try again.", inner).map((line) => RED + line + RESET));
+    if (followUp.draft !== null) lines.push('', ...wrap(`› ${followUp.draft}█`, inner));
     return lines;
   }
 }
 
-// "key  does" pairs on one line when they fit, one per line when they don't. Pairs from
-// `dimFrom` on are dimmed, as secondary choices.
-function keyHints(pairs, width, dimFrom = pairs.length) {
-  const plain = pairs.map(([key, does]) => `${key}  ${does}`);
-  const styled = pairs.map(([key, does], index) => (index >= dimFrom ? `${DIM}${key}  ${does}${RESET}` : `${BOLD}${key}${RESET}  ${does}`));
-  if (widthOf(plain.join('    ')) <= width) return [INDENT + styled.join('    ')];
-  return plain.map((text, index) => INDENT + (index >= dimFrom ? DIM : '') + truncate(text, width) + RESET);
+// A rounded card: ╭─ title ──── detail ─╮, the body padded inside │ │, then ╰───╯. Option rows keep
+// their click marker at the very start of the line.
+function card({ margin, cardWidth, inner }, title, detail, body) {
+  let titleText = title;
+  let detailText = detail;
+  let fill = cardWidth - 6 - visibleWidth(titleText) - (detailText ? visibleWidth(detailText) + 2 : 0);
+  if (fill < 1 && detailText) {
+    detailText = '';
+    fill = cardWidth - 6 - visibleWidth(titleText);
+  }
+  if (fill < 1) {
+    titleText = truncate(stripStyles(titleText), Math.max(1, cardWidth - 7));
+    fill = cardWidth - 6 - visibleWidth(titleText);
+  }
+  const top = margin + DIM + '╭─ ' + RESET + titleText + ' ' + DIM + '─'.repeat(Math.max(0, fill)) + RESET + (detailText ? ' ' + detailText + ' ' : '') + DIM + '─╮' + RESET;
+  const side = DIM + '│' + RESET;
+  const row = (line) => {
+    const marked = line.startsWith(OPTION_MARK);
+    const content = marked ? line.slice(2) : line;
+    const padding = ' '.repeat(Math.max(0, inner - visibleWidth(content)));
+    return (marked ? line.slice(0, 2) : '') + margin + side + '  ' + content + RESET + padding + '  ' + side;
+  };
+  const bottom = margin + DIM + '╰' + '─'.repeat(cardWidth - 2) + '╯' + RESET;
+  return [top, row(''), ...body.map(row), row(''), bottom];
+}
+
+// "key label" chips on one row, wrapping onto more rows when they don't fit.
+function hintRow(pairs, cols, margin) {
+  const width = Math.max(10, cols - margin.length - 1);
+  const rows = [];
+  let row = [];
+  let rowWidth = 0;
+  for (const [key, does] of pairs) {
+    const chipWidth = widthOf(`${key} ${does}`);
+    if (row.length && rowWidth + 3 + chipWidth > width) {
+      rows.push(row);
+      row = [];
+      rowWidth = 0;
+    }
+    row.push(BOLD + key + RESET + ' ' + DIM + truncate(does, Math.max(1, width - widthOf(key) - 1)) + RESET);
+    rowWidth += (row.length > 1 ? 3 : 0) + Math.min(chipWidth, width);
+  }
+  if (row.length) rows.push(row);
+  return rows.map((chips) => margin + ' ' + chips.join('   '));
 }
 
 // Adds a titled section below the question if at least one of its lines fits, oldest lines dropped
@@ -468,14 +528,17 @@ function fitSection(heading, sectionLines, room, cols) {
   return ['', rule, ...sectionLines.slice(sectionLines.length - fitting)];
 }
 
-function feedLine(step, textWidth) {
+function feedLine(step, textWidth, margin) {
   const [icon, color] = FEED_ICONS[step.kind] ?? ['·', DIM];
   const added = ` +${step.added ?? 0}`;
   const removed = ` −${step.removed ?? 0}`;
   const counts = step.kind === 'edit' ? GREEN + added + RESET + RED + removed + RESET : '';
   const countsWidth = step.kind === 'edit' ? widthOf(added + removed) : 0;
-  return INDENT + color + icon + RESET + ' ' + truncate(step.text.split('\n')[0], textWidth - 2 - countsWidth) + counts;
+  return margin + color + icon + RESET + ' ' + truncate(step.text.split('\n')[0], textWidth - 2 - countsWidth) + counts;
 }
+
+const stripStyles = (text) => text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
+const visibleWidth = (text) => widthOf(stripStyles(text));
 
 function emptyFollowUp() {
   return { thread: [], draft: null, pendingAsk: null, failed: false };

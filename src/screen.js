@@ -16,8 +16,9 @@ const END_FRAME = '\x1b[?2026l';
 // Ctrl-] as sent by plain terminals, by the kitty keyboard protocol, and by xterm's
 // modifyOtherKeys — Claude Code turns the latter two on, so all three can arrive.
 const TOGGLE_KEY = /\x1d|\x1b\[93;5u|\x1b\[27;5;93~/;
-// One key per piece: escape sequences (arrows, function keys) stay whole, everything else is one character.
-export const KEYS = /\x1b\[M[\s\S]{3}|\x1b\[[0-9;?<]*[\x40-\x7e]|\x1b.|[\s\S]/gu;
+// One key per piece: escape sequences (arrows, including application-mode ESC O A, function keys)
+// stay whole, everything else is one character.
+export const KEYS = /\x1b\[M[\s\S]{3}|\x1b\[[0-9;?<]*[\x40-\x7e]|\x1bO[A-Za-z]|\x1b.|[\s\S]/gu;
 
 const ALT_SCREEN_SWITCH = /\x1b\[\?(?:1049|1047|47)([hl])/g;
 // Mouse reporting: the focus view wants clicks (1000) in SGR form (1006); Claude may use its own.

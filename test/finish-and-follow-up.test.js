@@ -33,7 +33,7 @@ test('when Claude finishes mid-question, the question stays and the user chooses
   view.showFinished(finished);
   const screen = text();
   assert.match(screen, /Claude finished · 2 files changed/);
-  assert.match(screen, /Enter\s+back to Claude/);
+  assert.match(screen, /enter\s+back to Claude/);
   assert.match(screen, /c\s+keep going/);
   assert.match(screen, /Why retry refreshToken\?/, 'the question is still there');
 });
@@ -54,7 +54,7 @@ test('c keeps going: the banner goes and the quiz carries on', () => {
   view.handleKey('c');
   assert.equal(calls.keepGoing, 1);
   assert.doesNotMatch(text(), /keep going/);
-  assert.match(text(), /1-3 to answer/);
+  assert.match(text(), /enter answer/);
 });
 
 test('answering straight away also means keep going', () => {
@@ -65,7 +65,7 @@ test('answering straight away also means keep going', () => {
   assert.equal(calls.keepGoing, 1);
   assert.equal(calls.answers[0].correct, true);
   assert.match(text(), /✔ Correct/);
-  assert.doesNotMatch(text(), /Enter\s+back to Claude/);
+  assert.doesNotMatch(text(), /enter\s+back to Claude/);
 });
 
 test('the banner says when Claude is waiting for input rather than finished', () => {
@@ -89,7 +89,7 @@ test('after an answer, f lets the user ask their own follow-up', () => {
   assert.match(text(), /f\s+ask a follow-up/);
   view.handleKey('f');
   type('why not refresh early?');
-  assert.match(text(), /> why not refresh early\?/);
+  assert.match(text(), /› why not refresh early\?/);
   view.handleKey('\r');
   assert.deepEqual(calls.followUps, [{ question: retryQuestion, chosen: 0, ask: 'why not refresh early?', thread: [] }]);
   assert.match(text(), /Thinking/);
@@ -130,9 +130,9 @@ test('typing a follow-up supports backspace, and Esc (plain or kitty-encoded) ca
     view.handleKey('f');
     type('whyy');
     view.handleKey('\x7f');
-    assert.match(text(), /> why(?!y)/);
+    assert.match(text(), /› why(?!y)/);
     view.handleKey(esc);
-    assert.doesNotMatch(text(), /> why/);
+    assert.doesNotMatch(text(), /› why/);
     assert.match(text(), /f\s+ask a follow-up/);
     assert.deepEqual(calls.followUps, []);
   }
@@ -183,6 +183,6 @@ test('f before answering does nothing special', () => {
   const { view, calls, text } = setup();
   view.addQuestions([retryQuestion]);
   view.handleKey('f');
-  assert.match(text(), /1-3 to answer/);
+  assert.match(text(), /enter answer/);
   assert.deepEqual(calls.followUps, []);
 });

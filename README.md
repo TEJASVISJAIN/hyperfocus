@@ -8,25 +8,25 @@ what could break, which edge cases matter. As soon as Claude finishes or needs y
 switches back, with a recap of what you missed.
 
 ```
- ◑ hyperfocus · editing src/retry.ts · 0:14              Esc back to Claude
-────────────────────────────────────────────────────────────────────────────
-  Plan 2/4 ▰▰▱▱ Adding backoff to the retry helper
+ ◑ hyperfocus · editing src/retry.ts · 0:14                   Esc back to Claude
+ Plan 2/4 ▰▰▱▱ Adding backoff
 
-What's happening
-  The agent is wrapping refreshToken() in a withRetry helper with 3
-  attempts and a 200ms backoff.
+  ╭─ Question 3 · spot the bug ─────────────────────── ●●○ 1/2 ─╮
+  │                                                              │
+  │  What does this retry loop miss?                             │
+  │                                                              │
+  │    + for (let i = 0; i < attempts; i++) {                    │
+  │    +   await sleep(200);                                     │
+  │                                                              │
+  │  ▸ 1  Jitter: every client retries in lockstep               │
+  │    2  A maximum number of attempts                           │
+  │    3  Awaiting the sleep                                     │
+  │                                                              │
+  ╰──────────────────────────────────────────────────────────────╯
+   ↑↓ choose   enter answer   s skip   l live view   esc back to Claude
 
-Question 3 · spot the bug · score 2/2 · streak 2
-  What does this retry loop miss?
-
-    + for (let i = 0; i < attempts; i++) {
-    +   await sleep(200);
-
-  1) Jitter: every client retries in lockstep
-  2) A maximum number of attempts
-  3) Awaiting the sleep
-
-  press 1-3 to answer · s to skip · l live view · Esc back to Claude
+  What's happening
+  Wrapping refreshToken() in withRetry with 3 attempts and a 200ms backoff.
 ```
 
 ## Install
@@ -59,7 +59,8 @@ Windows isn't supported yet.
 | `Ctrl-]` | anywhere | switch between Claude and the focus view |
 | `Esc` | focus view | back to Claude (while typing a follow-up, it cancels the follow-up instead) |
 | `Enter` | while it's thinking of a question | back to Claude |
-| `1`–`4` or click | focus view | answer the question |
+| `↑`/`↓` (or `j`/`k`) and `Enter` | focus view | choose an option and answer |
+| `1`–`4` or click | focus view | answer straight away |
 | `s` | focus view | skip the question |
 | `l` | focus view | show or hide the live view: what Claude is doing right now |
 | `f` | after an answer | ask your own follow-up question; Enter to send, Esc to cancel |
