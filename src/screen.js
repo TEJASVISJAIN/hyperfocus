@@ -9,10 +9,15 @@ const LEAVE_ALT_SCREEN = '\x1b[?1049l';
 const HIDE_CURSOR = '\x1b[?25l';
 const SHOW_CURSOR = '\x1b[?25h';
 const CLEAR_AND_HOME = '\x1b[H\x1b[2J';
+// Terminals that support it paint the whole frame at once instead of flickering line by line.
+const BEGIN_FRAME = '\x1b[?2026h';
+const END_FRAME = '\x1b[?2026l';
 
 // Ctrl-] as sent by plain terminals, by the kitty keyboard protocol, and by xterm's
 // modifyOtherKeys — Claude Code turns the latter two on, so all three can arrive.
-const TOGGLE_KEYS = new Set(['\x1d', '\x1b[93;5u', '\x1b[27;5;93~']);
+const TOGGLE_KEY = /\x1d|\x1b\[93;5u|\x1b\[27;5;93~/;
+// One key per piece: escape sequences (arrows, function keys) stay whole, everything else is one character.
+const KEYS = /\x1b\[[0-9;?]*[\x40-\x7e]|\x1b.|[\s\S]/gu;
 
 /**
  * Owns the real terminal and decides whether it shows Claude or the focus view.
@@ -36,7 +41,7 @@ export function createScreen({ write, claude, cols, rows, focusView, onToggleKey
   let resizedWhileAway = false;
 
   function drawFocus() {
-    write(HIDE_CURSOR + CLEAR_AND_HOME + focusView.render({ cols: mirror.cols, rows: mirror.rows }));
+    write(BEGIN_FRAME + HIDE_CURSOR + CLEAR_AND_HOME + focusView.render({ cols: mirror.cols, rows: mirror.rows }) + END_FRAME);
   }
 
   return {
@@ -53,9 +58,16 @@ export function createScreen({ write, claude, cols, rows, focusView, onToggleKey
     },
 
     input(chunk) {
-      if (TOGGLE_KEYS.has(chunk)) return onToggleKey();
-      if (view === 'claude') claude.write(chunk);
-      else focusView.handleKey(chunk);
+      // Fast typing and pastes can put Ctrl-] in the middle of a chunk, so split around it.
+      const toggle = chunk.match(TOGGLE_KEY);
+      const before = toggle ? chunk.slice(0, toggle.index) : chunk;
+      if (before) {
+        if (view === 'claude') claude.write(before);
+        else for (const key of before.match(KEYS)) focusView.handleKey(key);
+      }
+      if (!toggle) return;
+      onToggleKey();
+      this.input(chunk.slice(toggle.index + toggle[0].length));
     },
 
     showFocus() {

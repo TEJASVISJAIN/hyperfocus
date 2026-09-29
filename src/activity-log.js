@@ -12,6 +12,13 @@ const OMITTED_DIFF = '(older change omitted)';
  * }} Run
  */
 
+// Paths inside the project read better relative to it; anything else stays absolute.
+export function relativeToProject(path, cwd = process.cwd()) {
+  if (!isAbsolute(path)) return path;
+  const fromCwd = relative(cwd, path);
+  return fromCwd.startsWith('..') ? path : fromCwd;
+}
+
 // What the agent has done since the user's last prompt — the raw material for questions and recaps.
 export function createActivityLog({ cwd = process.cwd() } = {}) {
   /** @type {Run | null} */
@@ -19,11 +26,7 @@ export function createActivityLog({ cwd = process.cwd() } = {}) {
   /** @type {Run | null} */
   let previousRun = null;
 
-  const displayPath = (path) => {
-    if (!isAbsolute(path)) return path;
-    const fromCwd = relative(cwd, path);
-    return fromCwd.startsWith('..') ? path : fromCwd;
-  };
+  const displayPath = (path) => relativeToProject(path, cwd);
 
   function startRun(prompt) {
     if (run) previousRun = run;

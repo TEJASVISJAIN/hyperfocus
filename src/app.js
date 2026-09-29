@@ -3,16 +3,13 @@ import { createAutoSwitch } from './auto-switch.js';
 import { focusDelayMs } from './cli-args.js';
 import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
+import { createFocusSession } from './focus-session.js';
 import { buildHookSettings } from './hook-settings.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { createScreen } from './screen.js';
 
 const TYPING_GRACE_MS = 2000;
-
-const placeholderFocusView = {
-  render: () => 'focus — Claude is working. Press Ctrl-] to go back.',
-  handleKey: () => {},
-};
+const CLOCK_TICK_MS = 1000;
 
 export async function runFocus(claudePath, claudeArgs, { auto }) {
   const { stdout } = process;
@@ -30,12 +27,14 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
     },
   });
 
+  const session = createFocusSession({ claudePath, redraw: () => screen.redrawFocus() });
+
   const screen = createScreen({
     write,
     claude: child,
     cols: stdout.columns || 80,
     rows: stdout.rows || 24,
-    focusView: placeholderFocusView,
+    focusView: { render: (size) => session.view.render(size), handleKey: (key) => session.handleKey(key) },
     onToggleKey: () => {
       const toView = screen.view === 'claude' ? 'focus' : 'claude';
       policy.manualToggle(toView);
@@ -60,8 +59,12 @@ export async function runFocus(claudePath, claudeArgs, { auto }) {
   eventServer.events.on('event', (event) => {
     debugLog('event', JSON.stringify(event).slice(0, 300));
     if (event.type === 'needs-input') lastNeedsInputMessage = event.message;
+    session.agentEvent(event);
     policy.agentEvent(event);
   });
+
+  // Keeps the elapsed time on the status line moving.
+  setInterval(() => screen.redrawFocus(), CLOCK_TICK_MS).unref();
 
   const restoreTerminal = takeOverTerminal((chunk) => {
     if (screen.view === 'claude') policy.userTyped();

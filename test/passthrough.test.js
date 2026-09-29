@@ -183,3 +183,15 @@ test('focus opens by itself while the agent works and hands back with a bell whe
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });
+
+test('Ctrl-] works even when it arrives in the same chunk as other keys', async () => {
+  const focus = startFocus();
+  await focus.nextReport('start');
+  focus.terminal.write('typed fast\r' + CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049h/);
+  focus.terminal.write(CTRL_RIGHT_BRACKET);
+  await focus.waitForScreen(/\x1b\[\?1049l/);
+  assert.equal((await focus.nextReport('line')).line, 'typed fast', 'the keys before Ctrl-] still reached claude');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
