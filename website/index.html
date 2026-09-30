@@ -113,10 +113,15 @@ code, kbd, pre { font-family: var(--mono); }
   background: color-mix(in srgb, var(--ground-2) 70%, transparent);
   padding: 7px 14px; border-radius: 14px;
   filter: blur(4.5px); opacity: 0.75;
-  animation: rack-out 1.6s cubic-bezier(.2,.7,.2,1) both, drift var(--drift, 18s) ease-in-out infinite alternate;
+  animation: rack-out 3.2s cubic-bezier(.45,0,.2,1) both, drift var(--drift, 18s) ease-in-out infinite alternate;
 }
 .chip b { color: var(--ink-soft); font-weight: 700; }
-@keyframes rack-out { from { filter: blur(0); opacity: 1; } to { filter: blur(4.5px); opacity: 0.75; } }
+/* Sharp and loud first, so you see them go: attention leaving the noise. */
+@keyframes rack-out {
+  0% { filter: blur(0); opacity: 1; color: var(--ink-soft); }
+  35% { filter: blur(0.5px); opacity: 1; }
+  100% { filter: blur(4.5px); opacity: 0.75; color: var(--noise); }
+}
 @keyframes drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(var(--dx, 14px), var(--dy, -18px), 0); } }
 
 .eyebrow { font-family: var(--mono); font-size: var(--step--1); color: var(--focus); letter-spacing: 0.04em; display: inline-flex; gap: 10px; align-items: center; }
@@ -124,7 +129,7 @@ code, kbd, pre { font-family: var(--mono); }
 .hero h1 {
   font-size: var(--step-4); font-weight: 800; letter-spacing: -0.035em; font-stretch: 88%;
   margin-block: 18px 22px; max-width: 13ch;
-  animation: rack-in 1.4s cubic-bezier(.2,.7,.2,1) both;
+  animation: rack-in 2.4s cubic-bezier(.2,.7,.2,1) 0.9s both;
 }
 .hero h1 em { font-style: normal; color: var(--focus); font-stretch: 70%; }
 @keyframes rack-in {
@@ -638,7 +643,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
     chip.style.setProperty('--dx', (index % 2 ? -1 : 1) * (10 + (index * 7) % 22) + 'px');
     chip.style.setProperty('--dy', (index % 3 ? 1 : -1) * (8 + (index * 5) % 20) + 'px');
     chip.style.setProperty('--drift', 14 + (index * 3) % 12 + 's');
-    chip.style.animationDelay = `${0.15 + index * 0.04}s, 0s`;
+    chip.style.animationDelay = `${1.1 + index * 0.22}s, 0s`; // held sharp for a moment, then one by one
     noise.appendChild(chip);
   });
 
