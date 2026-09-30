@@ -59,3 +59,12 @@ test('the brief review fits a screen and says nothing when there is nothing to s
   assert.ok(text.split('\n').length <= 12);
   assert.equal(formatBrief([]), '');
 });
+
+test('a block whose end marker was edited away is left alone, with a clear message', () => {
+  const cwd = repo();
+  const { path } = installHook({ cwd });
+  const damaged = readFileSync(path, 'utf8').replace(/# <<< hyperfocus <<<\n/, '');
+  writeFileSync(path, damaged);
+  assert.throws(() => uninstallHook({ cwd }), /no end marker/);
+  assert.equal(readFileSync(path, 'utf8'), damaged);
+});

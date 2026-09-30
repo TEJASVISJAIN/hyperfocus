@@ -41,7 +41,10 @@ export function uninstallHook({ cwd = process.cwd() } = {}) {
   const existing = existsSync(path) ? readFileSync(path, 'utf8') : '';
   const start = existing.indexOf(START);
   if (start === -1) return { path, removed: false };
-  const end = existing.indexOf(END, start) + END.length;
+  const endAt = existing.indexOf(END, start);
+  // The end marker was edited away: removing up to a guess could eat the user's own lines.
+  if (endAt === -1) throw new Error(`the hyperfocus block in ${path} has no end marker; remove it by hand`);
+  const end = endAt + END.length;
   const rest = existing.slice(0, start) + existing.slice(end).replace(/^\n/, '');
   if (rest.trim() === '#!/bin/sh') rmSync(path);
   else writeFileSync(path, rest);
