@@ -1,0 +1,35 @@
+{
+  "name": "hyperfocus",
+  "displayName": "hyperfocus",
+  "description": "Your hyperfocus stats, weak spots and saved questions, right in VS Code.",
+  "version": "0.1.0",
+  "publisher": "ddalus",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Education", "Other"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "hyperfocus", "title": "hyperfocus", "icon": "media/icon.svg" }]
+    },
+    "views": {
+      "hyperfocus": [{ "type": "webview", "id": "hyperfocus.panel", "name": "Learning" }]
+    },
+    "commands": [
+      { "command": "hyperfocus.start", "title": "hyperfocus: Start in a terminal" },
+      { "command": "hyperfocus.openNotebook", "title": "hyperfocus: Open saved questions" },
+      { "command": "hyperfocus.refresh", "title": "hyperfocus: Refresh", "icon": "$(refresh)" }
+    ],
+    "menus": {
+      "view/title": [{ "command": "hyperfocus.refresh", "when": "view == hyperfocus.panel", "group": "navigation" }]
+    },
+    "configuration": {
+      "title": "hyperfocus",
+      "properties": {
+        "hyperfocus.command": { "type": "string", "default": "npx @ddalus/hyperfocus", "description": "How to start hyperfocus in the terminal, for example `hyperfocus` or `hyperfocus codex`." },
+        "hyperfocus.home": { "type": "string", "default": "", "description": "Where hyperfocus keeps its data. Empty means ~/.hyperfocus (or HYPERFOCUS_HOME)." }
+      }
+    }
+  }
+}
