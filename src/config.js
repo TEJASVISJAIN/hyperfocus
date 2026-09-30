@@ -7,7 +7,7 @@ export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
 /**
  * @typedef {{
  *   delayMs: number, model: string, questionsPerBatch: number, kinds: string[],
- *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy', quiet: boolean, animations: boolean
+ *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy', quiet: boolean, animations: boolean, agent: 'claude' | 'codex' | 'gemini'
  * }} Config
  */
 
@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   mouse: true, // click options in the focus view
   switchOn: 'edit', // 'edit': wait for something to quiz on (an edit or a plan); 'busy': switch after delayMs, like 0.2.0
   animations: true, // false: the spinner stands still
+  agent: 'claude', // what a bare `hyperfocus` wraps: claude, codex or gemini
   quiet: false, // never switch to the quiz by itself (Ctrl-] still opens it)
   live: false, // start with the live panel open (feed of agent steps + peek at Claude); `l` toggles it
 });
@@ -37,6 +38,7 @@ const RULES = {
   switchOn: [(value) => value === 'edit' || value === 'busy', 'must be "edit" or "busy"'],
   quiet: [isBoolean, 'must be true or false'],
   animations: [isBoolean, 'must be true or false'],
+  agent: [(value) => ['claude', 'codex', 'gemini'].includes(value), 'must be "claude", "codex" or "gemini"'],
 };
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 

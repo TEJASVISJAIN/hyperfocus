@@ -41,6 +41,31 @@ mouse clicks and desktop notifications may not work (the bell does). If the scre
 switching back to Claude, please open an issue with your terminal and Claude Code versions. It hasn't
 been tested on a real Windows machine yet, only in CI.
 
+## Other agents (experimental)
+
+```sh
+hyperfocus codex            # OpenAI Codex CLI; every other argument goes to codex
+hyperfocus gemini           # Google Gemini CLI
+```
+
+The quiz, recap, notes, review and stats work the same way, and the screen names the agent you're
+using. If `claude` is installed, it still writes the questions, because they come out best that way.
+Otherwise the agent writes them with its own non-interactive mode (`codex exec`, `gemini -p`), so you
+don't need Claude Code. Set `"agent": "codex"` in the config to make a bare `hyperfocus` start Codex.
+
+Your agent's own settings files never change:
+
+- **Codex** reads hooks only from files, so hyperfocus starts it with `CODEX_HOME` pointing at
+  `~/.hyperfocus/codex-home`. That folder mirrors your `~/.codex` with symlinks (auth, config and
+  sessions stay where they are) and adds a `hooks.json` holding your hooks plus hyperfocus's. Codex asks
+  you once to trust the new hook. Files Codex creates there are moved back into `~/.codex` afterwards.
+- **Gemini** gets its system settings from `GEMINI_CLI_SYSTEM_SETTINGS_PATH`: a copy of your system
+  settings, if you have any, with hyperfocus's hooks added.
+
+These adapters follow the Codex and Gemini hook docs and are tested against stand-ins built from them,
+not against the real CLIs yet. Please open an issue if a quiz never appears.
+`HYPERFOCUS_CODEX_BIN` and `HYPERFOCUS_GEMINI_BIN` point at non-standard installs.
+
 ## Keys
 
 | Key | Where | Does |

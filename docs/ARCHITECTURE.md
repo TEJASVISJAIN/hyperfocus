@@ -167,6 +167,8 @@ flowchart TB
 | `src/code-context.js` | the code around the latest edits, for the question prompt | `code-context.test.js` |
 | `src/git-hook.js` | install and remove the marked `pre-push` block; the brief review it prints | `git-hook.test.js` (real temp repos) |
 | `src/doctor.js` | `--doctor` checks, injectable | `doctor.test.js` |
+| `src/agents/` | one adapter per agent (Claude, Codex, Gemini): find it, attach hooks to a launch, payload → events, question writer | `agent-adapters.test.js` (shared contract), `agents-codex-gemini.test.js`, end-to-end tests with fake agents |
+| `src/launch.js` | start a path without a shell: `.js` with node, Windows `.cmd` shims as node + script | `launch.test.js` |
 | `src/demo/` | `--demo`: the stand-in agent and its throwaway folders | end-to-end PTY test |
 | `src/notes.js` | run log (`runs.jsonl`, with durations), `--notes`, the Markdown checklist, the median run length | `notes.test.js` |
 | `src/review.js` | the `--review` screen | by hand (see below) |
@@ -568,6 +570,7 @@ history with one kept and one discarded question.
 | Bad questions | `b` writes `rating: "bad"`; every reader drops that question | deleting history lines (append-only log) |
 | Concept tags | 12 fixed tags, unknown ones dropped | free text (unreadable stats within a week) |
 | Streak | consecutive days with an answer | sessions (history only records sessions with answers, so every session is "in a row") |
+| Other agents | one adapter each; Codex through a mirrored `CODEX_HOME` with a stable path (so hook trust sticks), Gemini through a copied system settings file | editing `~/.codex/hooks.json` or `~/.gemini/settings.json` (touches user config, leaks on crash); `--dangerously-bypass-hook-trust` (would also run untrusted repositories' hooks) |
 | Demo | a stand-in agent that fires the real hooks, writes real files in a temp project, and answers `-p` with canned JSON | special demo code paths in the app (the demo would stop showing the real thing) |
 | Language | plain Node ESM, JSDoc types checked by `tsc` | TypeScript build step (slower hook startup, more tooling) |
 

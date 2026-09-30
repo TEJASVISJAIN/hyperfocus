@@ -43,7 +43,7 @@ export function probeQuestionWriter({ claudePath, writer = claudeAgent.writer, m
       else resolve({ ok: true, detail: `${model ?? 'the default model'} answered in ${seconds}s` });
     });
     child.stdin.on('error', () => {});
-    child.stdin.end('ok?');
+    child.stdin.end(writer.input ? writer.input('Reply with the single word: ok', 'ok?') : 'ok?');
   });
 }
 
@@ -134,7 +134,7 @@ export function createQuizEngine({
         resolve(reply);
       });
       child.stdin.on('error', () => {});
-      child.stdin.end(prompt);
+      child.stdin.end(writer.input ? writer.input(systemPrompt, prompt) : prompt);
     });
   }
 

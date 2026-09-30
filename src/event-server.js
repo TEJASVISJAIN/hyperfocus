@@ -10,6 +10,7 @@ let serverCount = 0;
 
 // Listens on a unix socket (a named pipe on Windows) for payloads from bin/hyperfocus-hook.js and
 // emits them as FocusEvents.
+/** @param {{ platform?: string, toEvent?: (payload: any) => any }} [options] */
 export async function startEventServer({ platform = process.platform, toEvent = toFocusEvent } = {}) {
   const name = `hyperfocus-${process.pid}-${serverCount++}`;
   const isPipe = platform === 'win32';
@@ -55,9 +56,11 @@ function handleLine(line, events, toEvent) {
     return;
   }
   try {
-    const event = toEvent(payload);
-    debugLog('hook', payload?.hook_event_name, payload?.tool_name ?? '', event ? event.type : '(ignored)');
-    if (event) events.emit('event', event);
+    // One payload can be several events: a Codex patch that touches three files is three edits.
+    const result = toEvent(payload);
+    const found = Array.isArray(result) ? result : result ? [result] : [];
+    debugLog('hook', payload?.hook_event_name, payload?.tool_name ?? '', found.map((event) => event.type).join(',') || '(ignored)');
+    for (const event of found) events.emit('event', event);
   } catch (error) {
     // A bug handling one event must never take down the user's Claude session.
     debugLog('error handling hook event', error.stack);

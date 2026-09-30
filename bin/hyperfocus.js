@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { claudeAgent } from '../src/agents/claude.js';
+import { agentNamed } from '../src/agents/index.js';
 import { runFocus } from '../src/app.js';
 import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { parseFocusArgs } from '../src/cli-args.js';
@@ -14,7 +16,7 @@ import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo } = parseFocusArgs(process.argv.slice(2));
+const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -82,7 +84,7 @@ if (demo) {
   await main();
 }
 
-// Everything except the demo: hyperfocus around the real claude.
+// Everything except the demo: hyperfocus around the real agent.
 async function main() {
   const claudePath = resolveClaudeBinary();
   if (doctor) {
@@ -99,18 +101,22 @@ async function main() {
     process.exit(await runReview({ claudePath, config }));
   }
 
-  if (!claudePath) {
-    process.stderr.write(
-      'hyperfocus: could not find `claude` on your PATH.\n' +
-        'Install Claude Code (https://claude.com/claude-code) or set HYPERFOCUS_CLAUDE_BIN to its path.\n',
-    );
+  const agent = agentNamed(agentCommand ?? config.agent) ?? claudeAgent;
+  const agentPath = agent === claudeAgent ? claudePath : agent.findBinary();
+  if (!agentPath) {
+    process.stderr.write(`hyperfocus: could not find \`${agent.id}\` on your PATH.\n${agent.missingHelp}\n`);
     process.exit(127);
   }
+  // Claude writes the best questions, so it does whenever it is installed; otherwise the agent itself.
+  const writer =
+    claudePath
+      ? { path: claudePath, adapter: claudeAgent.writer, model: config.model }
+      : { path: agentPath, adapter: agent.writer, model: config.model === DEFAULT_CONFIG.model ? agent.writer.defaultModel : config.model };
 
   if (process.stdin.isTTY && process.stdout.isTTY) {
     ensureSpawnHelperIsExecutable();
-    await runFocus(claudePath, claudeArgs, { auto, config });
+    await runFocus(agentPath, claudeArgs, { auto, config, agent, writer });
   } else {
-    runPlain(claudePath, claudeArgs);
+    runPlain(agentPath, claudeArgs);
   }
 }

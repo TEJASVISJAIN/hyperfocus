@@ -11,6 +11,7 @@ import { buildHookSettings } from '../hook-settings.js';
  *   args: (systemPrompt: string, model: string | null) => string[],
  *   env: (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv,
  *   parse: (stdout: string) => { text: string, isError: boolean } | null,
+ *   input?: (systemPrompt: string, prompt: string) => string,
  *   defaultModel: string | null,
  * }} QuestionWriter
  * @typedef {{
@@ -18,8 +19,8 @@ import { buildHookSettings } from '../hook-settings.js';
  *   name: string,
  *   findBinary: (env?: NodeJS.ProcessEnv) => string | null,
  *   missingHelp: string,
- *   prepareLaunch: (options: { socketPath: string, hookCommand?: string, env?: NodeJS.ProcessEnv }) => { args: string[], env: NodeJS.ProcessEnv, cleanup: () => void },
- *   toEvent: (payload: any) => import('../hook-events.js').FocusEvent | null,
+ *   prepareLaunch: (options: { socketPath: string, env?: NodeJS.ProcessEnv, home?: string }) => { args: string[], env: NodeJS.ProcessEnv, cleanup: () => void },
+ *   toEvent: (payload: any) => import('../hook-events.js').FocusEvent | import('../hook-events.js').FocusEvent[] | null,
  *   writer: QuestionWriter,
  * }} AgentAdapter
  */

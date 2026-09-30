@@ -378,3 +378,40 @@ test('--demo replays a scripted change through the real quiz, without claude, an
   await focus.exited;
   assert.deepEqual(JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')), { introSeenAt: '2026-01-01T00:00:00.000Z' }, "the user's own data folder is untouched");
 });
+
+const fakeCodex = fileURLToPath(new URL('./fixtures/fake-codex.js', import.meta.url));
+
+test('hyperfocus codex wraps Codex: its hooks drive the quiz, and without Claude, Codex writes the questions', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const codexHome = mkdtempSync(join(tmpdir(), 'focus-codex-home-'));
+  const focus = startFocus(['codex', '--some-codex-flag'], {
+    home,
+    env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CODEX_BIN: fakeCodex, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude', CODEX_HOME: codexHome },
+  });
+  await focus.waitForScreen(/fake codex ready --enable hooks --some-codex-flag/);
+  focus.terminal.write('go\r');
+  await focus.waitForScreen(/Why retry the token refresh\?/, 8000);
+  assert.match(focus.transcript(), /Esc back to Codex/);
+  focus.terminal.write('\x1b');
+  await pause(300);
+  focus.terminal.write('quit\r');
+  await focus.exited;
+});
+
+const fakeGemini = fileURLToPath(new URL('./fixtures/fake-gemini.js', import.meta.url));
+
+test('hyperfocus gemini wraps Gemini through a copy of its system settings', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus(['gemini'], {
+    home,
+    env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_GEMINI_BIN: fakeGemini, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude', GEMINI_CLI_SYSTEM_SETTINGS_PATH: join(home, 'none.json') },
+  });
+  await focus.waitForScreen(/fake gemini ready/);
+  focus.terminal.write('go\r');
+  await focus.waitForScreen(/Why does refresh need a retry\?/, 8000);
+  assert.match(focus.transcript(), /Esc back to Gemini/);
+  focus.terminal.write('\x1b');
+  await pause(300);
+  focus.terminal.write('quit\r');
+  await focus.exited;
+});

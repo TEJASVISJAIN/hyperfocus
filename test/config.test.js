@@ -26,6 +26,7 @@ test('without a config file, the defaults apply', () => {
     switchOn: 'edit',
     quiet: false,
     animations: true,
+    agent: 'claude',
   });
 });
 

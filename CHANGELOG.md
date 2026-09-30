@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- **Other agents, experimental:** `hyperfocus codex …` wraps OpenAI Codex CLI and `hyperfocus gemini …`
+  wraps Google Gemini CLI, with the same quiz, recap, notes, review and stats. Claude writes the
+  questions when it is installed; otherwise the agent does, with `codex exec` or `gemini -p`. Your agent
+  settings never change: Codex runs with a mirrored `CODEX_HOME`, and Gemini with a copy of its system
+  settings. `"agent"` in the config chooses what a bare `hyperfocus` starts.
+- The screen names the agent it is wrapping.
+- Under the hood, everything agent-specific sits behind one adapter, with a contract test every agent
+  must pass.
+
 ## 0.4.0
 
 - **Windows, experimental:** npm no longer refuses to install on Windows. hyperfocus finds `claude.exe`

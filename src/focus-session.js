@@ -20,15 +20,16 @@ export function createFocusSession({
   onQuiet = undefined,
   config = DEFAULT_CONFIG,
   agent = claudeAgent,
+  writer = { path: claudePath, adapter: agent.writer, model: config.model }, // who writes the questions
   projectAccuracy = { answered: 0, correct: 0 },
   badQuestions = () => [],
 }) {
   const log = createActivityLog();
   let missedThisRun = []; // wrong answers in the current run, for the "worth a look" checklist
   const engine = createQuizEngine({
-    claudePath,
-    writer: agent.writer,
-    model: config.model,
+    claudePath: writer.path,
+    writer: writer.adapter,
+    model: writer.model,
     kinds: config.kinds,
     questionsPerBatch: config.questionsPerBatch,
     accuracy: () => ({

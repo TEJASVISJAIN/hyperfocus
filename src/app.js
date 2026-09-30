@@ -28,10 +28,10 @@ const isShortRunProject = (cwd, delayMs) => {
  * Runs the agent at `agentPath` (Claude unless `agent` says otherwise) with the quiz around it.
  * @param {string} agentPath
  * @param {string[]} agentArgs
- * @param {{ auto: boolean, config: import('./config.js').Config, agent?: import('./agents/claude.js').AgentAdapter }} options
+ * @param {{ auto: boolean, config: import('./config.js').Config, agent?: import('./agents/claude.js').AgentAdapter, writer?: { path: string, adapter: import('./agents/claude.js').QuestionWriter, model: string | null } }} options
  */
 export async function runFocus(agentPath, agentArgs, options) {
-  const { auto, config, agent = claudeAgent } = options;
+  const { auto, config, agent = claudeAgent, writer = { path: agentPath, adapter: agent.writer, model: config.model } } = options;
   const { stdout } = process;
   const eventServer = await startEventServer({ toEvent: agent.toEvent });
   const write = (data) => stdout.write(data);
@@ -58,6 +58,7 @@ export async function runFocus(agentPath, agentArgs, options) {
   const session = createFocusSession({
     claudePath: agentPath,
     agent,
+    writer,
     config,
     projectAccuracy: recentAccuracy({ cwd }),
     badQuestions: () => recentBadQuestions({ cwd }),

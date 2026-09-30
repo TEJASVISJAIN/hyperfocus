@@ -5,8 +5,11 @@ const HOOK_TIMEOUT_SECONDS = 5;
 
 // Passed to `claude --settings`. Claude Code merges these hooks with the user's own
 // settings files, so nothing on disk needs to change for hyperfocus to work.
+// How every agent runs hyperfocus's hook script.
+export const hookCommand = () => `"${process.execPath}" "${hookScript}"`;
+
 export function buildHookSettings() {
-  const command = `"${process.execPath}" "${hookScript}"`;
+  const command = hookCommand();
   const hook = (matcher) => ({
     ...(matcher ? { matcher } : {}),
     hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_SECONDS }],
