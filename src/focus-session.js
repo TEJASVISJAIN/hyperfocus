@@ -3,6 +3,7 @@ import { DEFAULT_CONFIG } from './config.js';
 import { createFocusView } from './focus-view.js';
 import { createQuizEngine } from './quiz-engine.js';
 import { redactSecrets } from './redact.js';
+import { colorAllowed } from './styles.js';
 
 // Connects agent events to the activity log, the quiz engine and the focus view.
 // `redraw` is called whenever what the focus view shows may have changed; `onBack` when the user
@@ -36,6 +37,8 @@ export function createFocusSession({
   let keepGoing = false; // chose to carry on with the quiz after Claude finished
   const view = createFocusView({
     live: config.live,
+    color: colorAllowed(),
+    animations: config.animations,
     onAnswer: (entry) => {
       if (entry.correct === false) missedThisRun.push(entry);
       if (entry.rating === 'bad') missedThisRun = missedThisRun.filter((missed) => missed.question !== entry.question);

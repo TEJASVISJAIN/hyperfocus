@@ -25,6 +25,7 @@ test('without a config file, the defaults apply', () => {
     live: false,
     switchOn: 'edit',
     quiet: false,
+    animations: true,
   });
 });
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createFocusView } from '../src/focus-view.js';
+import { colorAllowed } from '../src/styles.js';
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
 const lines = (rendered) => stripAnsi(rendered).split('\r\n');
@@ -232,4 +233,32 @@ test('b rates the question bad: unscored, reported, and the next question comes 
   assert.deepEqual(answers[2], { question: attemptsQuestion, chosen: null, correct: null, skipped: true, rating: 'bad' });
   assert.match(screenText(render()), /Why retry refreshToken\?/);
   assert.match(screenText(render()), /○● 1\/1/, 'the bad question shows as skipped');
+});
+
+test('without colour, nothing is coloured and right and wrong still look different', () => {
+  const answers = [];
+  const view = createFocusView({ onAnswer: (entry) => answers.push(entry), color: false });
+  view.addQuestions([retryQuestion, retryQuestion, retryQuestion]);
+  view.handleKey('2');
+  view.handleKey('x');
+  view.handleKey('1');
+  const rendered = view.render({ cols: 80, rows: 30, now: 74_000 });
+  assert.doesNotMatch(rendered, /\x1b\[3[0-9]m/, 'no colour codes');
+  assert.match(rendered, /\x1b\[1m/, 'bold is still allowed');
+  assert.match(stripAnsi(rendered), /●✗ 1\/2/);
+});
+
+test('with animations off, the spinner stands still', () => {
+  const view = createFocusView({ onAnswer: () => {}, animations: false });
+  view.setActivity('editing a.ts', 0);
+  const frames = new Set([0, 1000, 2000, 3000].map((now) => lines(view.render({ cols: 80, rows: 20, now }))[0].slice(0, 4)));
+  assert.equal(frames.size, 1);
+  assert.match([...frames][0], /·/);
+});
+
+test('colour is off with NO_COLOR set (and not empty) or TERM=dumb', () => {
+  assert.equal(colorAllowed({}), true);
+  assert.equal(colorAllowed({ NO_COLOR: '1' }), false);
+  assert.equal(colorAllowed({ NO_COLOR: '' }), true);
+  assert.equal(colorAllowed({ TERM: 'dumb' }), false);
 });

@@ -1,5 +1,5 @@
 import { renderRecap } from './recap.js';
-import { BLUE, BOLD, CYAN, DIM, GREEN, INDENT, INVERSE, MAGENTA, RED, RESET, YELLOW } from './styles.js';
+import { BLUE, BOLD, CYAN, DIM, GREEN, INDENT, INVERSE, MAGENTA, RED, RESET, YELLOW, stripColor } from './styles.js';
 import { truncate, widthOf, wrap } from './text-layout.js';
 
 // Claude Code turns on the kitty keyboard protocol, which the terminal keeps using while the
@@ -74,6 +74,8 @@ export function createFocusView({
   summaryHeading = "What's happening",
   live = false, // start with the live panel (feed and peek) open; `l` toggles it
   liveToggle = true, // offer `l` at all (review mode has no agent to watch)
+  color = true, // false for NO_COLOR: styles stay, colours go
+  animations = true, // false: the spinner stands still
 }) {
   let activity = 'thinking';
   let activityStartedAt = Date.now();
@@ -382,20 +384,21 @@ export function createFocusView({
 
   // Remembers which rows are options, so a click there can answer. Only rows the question itself
   // marked count: a peek or summary line that happens to read "1) …" is not an option.
-  function finish(screen) {
+  function finish(rowsShown) {
     clickRows = new Map();
     const optionsClickable = current() && !feedback && !recap && !intro;
-    const lines = screen.map((line, index) => {
+    const lines = rowsShown.map((line, index) => {
       if (!line.startsWith(OPTION_MARK)) return line;
       if (optionsClickable) clickRows.set(index + 1, line[1]);
       return line.slice(2);
     });
-    return lines.join('\r\n');
+    const drawn = lines.join('\r\n');
+    return color ? drawn : stripColor(drawn);
   }
 
   function statusLine(cols, now) {
     const hint = backHint + ' ';
-    const frame = !spinner || IDLE_ACTIVITIES.has(activity) ? '' : `${SPINNER[Math.floor(now / 1000) % SPINNER.length]} `;
+    const frame = !spinner || IDLE_ACTIVITIES.has(activity) ? '' : `${animations ? SPINNER[Math.floor(now / 1000) % SPINNER.length] : '·'} `;
     const left = ` ${frame}${title} · ${activity} · ${formatElapsed(now - activityStartedAt)} `;
     const room = cols - widthOf(hint);
     const fitted = room >= 12 ? truncate(left, room - 1) : truncate(left, cols);
@@ -497,7 +500,7 @@ export function createFocusView({
   // "●●○ 2/3 · streak 2": this run's answers as dots, then the score.
   function scoreDetail() {
     if (results.length === 0) return '';
-    const dots = results.slice(-MAX_DOTS).map((outcome) => (outcome === 'right' ? GREEN + '●' : outcome === 'wrong' ? RED + '●' : DIM + '○') + RESET).join('');
+    const dots = results.slice(-MAX_DOTS).map((outcome) => (outcome === 'right' ? GREEN + '●' : outcome === 'wrong' ? RED + (color ? '●' : '✗') : DIM + '○') + RESET).join('');
     return dots + DIM + ` ${correct}/${answered}` + (streak >= 2 ? ` · streak ${streak}` : '') + RESET;
   }
 

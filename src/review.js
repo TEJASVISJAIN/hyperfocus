@@ -2,6 +2,7 @@ import { createFocusView } from './focus-view.js';
 import { createHistory, missedStillInCode } from './history.js';
 import { createQuizEngine } from './quiz-engine.js';
 import { CLEAR_AND_HOME, ENTER_ALT_SCREEN, HIDE_CURSOR, KEYS, LEAVE_ALT_SCREEN, MOUSE_OFF, MOUSE_ON, SHOW_CURSOR } from './screen.js';
+import { colorAllowed } from './styles.js';
 const QUIT_KEYS = new Set(['q', '\x03', '\x1b']);
 
 /**
@@ -28,6 +29,7 @@ export async function runReview({ claudePath, config, cwd = process.cwd() }) {
     spinner: false,
     summaryHeading: 'Review',
     liveToggle: false,
+    color: colorAllowed(),
     onAnswer: (entry) => {
       if (!entry.skipped) {
         reviewed++;

@@ -10,3 +10,7 @@ export const CYAN = '\x1b[36m';
 export const INVERSE = '\x1b[7m';
 export const RESET = '\x1b[0m';
 export const INDENT = '  ';
+
+// https://no-color.org: a non-empty NO_COLOR turns colour off; bold, dim and inverse stay.
+export const colorAllowed = (env = process.env) => !env.NO_COLOR && env.TERM !== 'dumb';
+export const stripColor = (text) => text.replace(/\x1b\[3[0-9]m/g, '');
