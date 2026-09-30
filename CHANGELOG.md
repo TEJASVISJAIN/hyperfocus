@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- A long run that only reads code ("check the entire app") now opens the quiz after 30 seconds, with
+  questions about the code the agent is exploring. 0.5.0 waited for the first edit, which could take
+  minutes.
+
 ## 0.5.0
 
 - **Other agents, experimental:** `hyperfocus codex …` wraps OpenAI Codex CLI and `hyperfocus gemini …`

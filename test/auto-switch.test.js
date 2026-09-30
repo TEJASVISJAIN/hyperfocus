@@ -211,7 +211,7 @@ test('in a project whose runs are usually short, the quiz waits for a second edi
   const { policy, calls } = setup({ switchOn: 'edit', shortRuns: true });
   policy.agentEvent(busy);
   policy.agentEvent(edit);
-  mock.timers.tick(30_000);
+  mock.timers.tick(20_000);
   assert.deepEqual(calls, []);
   policy.agentEvent(edit);
   assert.deepEqual(calls, ['open focus']);
@@ -239,4 +239,22 @@ test('going quiet stops automatic switching for good, but the agent finishing st
   setView('focus'); // Ctrl-] still opens it by hand
   policy.agentEvent(done);
   assert.deepEqual(calls, ['return: done']);
+});
+
+test('a long run that only reads still opens the quiz after 30 seconds: exploring is a long wait too', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent({ type: 'read', sessionId: 's', target: 'a' });
+  mock.timers.tick(29_999);
+  assert.deepEqual(calls, []);
+  mock.timers.tick(1);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('short-run projects also stop waiting for a second edit after 30 seconds', () => {
+  const { policy, calls } = setup({ switchOn: 'edit', shortRuns: true });
+  policy.agentEvent(busy);
+  policy.agentEvent(edit);
+  mock.timers.tick(30_000);
+  assert.deepEqual(calls, ['open focus']);
 });

@@ -1,4 +1,7 @@
 // Not 'subagent-done': Claude Code's prompt-suggestion agent finishes after Stop, when nothing is running.
+// However little has changed, a run this long is a wait worth filling: questions can be about the
+// code the agent is reading.
+const LONG_RUN_MS = 30_000;
 const AGENT_STEPS = new Set(['read', 'edit', 'command', 'subagent']);
 
 /**
@@ -7,7 +10,7 @@ const AGENT_STEPS = new Set(['read', 'edit', 'command', 'subagent']);
  * - The agent must be busy for `delayMs` first, so quick replies never interrupt.
  * - With `switchOn: 'edit'`, there must also be something to quiz on: an edit, or a plan of two or
  *   more steps. A plan of three or more halves the wait; in a project whose runs are usually short
- *   (`shortRuns`), it takes a second edit.
+ *   (`shortRuns`), it takes a second edit. After 30 seconds busy, it opens regardless.
  * - Never switch away while the user is typing.
  * - The moment the agent finishes or needs the user, give the screen back, whoever opened the focus view.
  * - If the user goes back to Claude by hand, respect it until their next prompt.
@@ -35,7 +38,7 @@ export function createAutoSwitch({
     timer = setTimeout(openWhenReady, waitMs);
   }
 
-  const somethingToQuizOn = () => switchOn === 'busy' || edits >= (shortRuns ? 2 : 1) || planSteps >= 2;
+  const somethingToQuizOn = () => switchOn === 'busy' || Date.now() - busySince >= LONG_RUN_MS || edits >= (shortRuns ? 2 : 1) || planSteps >= 2;
   const waitMs = () => (switchOn === 'edit' && planSteps >= 3 ? delayMs / 2 : delayMs);
 
   function openWhenReady() {
@@ -44,7 +47,8 @@ export function createAutoSwitch({
     if (!agentBusy || userChoseClaude || currentView() === 'focus') return;
     const tooSoonBy = busySince + waitMs() - Date.now();
     if (tooSoonBy > 0) return schedule(tooSoonBy);
-    if (!somethingToQuizOn()) return; // the next edit or plan step checks again
+    // The next edit or plan step checks again; failing those, a long run opens anyway.
+    if (!somethingToQuizOn()) return schedule(busySince + LONG_RUN_MS - Date.now());
     const stillTypingFor = lastTypedAt + typingGraceMs - Date.now();
     if (stillTypingFor > 0) return schedule(stillTypingFor);
     openFocus();
@@ -71,7 +75,7 @@ export function createAutoSwitch({
       if (AGENT_STEPS.has(event.type)) {
         // Claude carries on after a permission prompt without a new prompt event.
         if (agentBusy) {
-          if (event.type === 'edit' && auto && !userChoseClaude && !timer) openWhenReady();
+          if (event.type === 'edit' && auto && !userChoseClaude) openWhenReady();
           return;
         }
         agentBusy = true;

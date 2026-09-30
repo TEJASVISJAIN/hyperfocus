@@ -564,7 +564,7 @@ history with one kept and one discarded question.
 | Live view on screen | hidden by default, `l` toggles, `"live": true` to start open | always on (noise under every question) |
 | Telling kept changes from discarded ones | anchor lines checked against the file on disk | git history (not every project, uncommitted work); asking the user |
 | Answer position | shuffled locally | trusting the model (it favours one slot) |
-| When the quiz opens (0.3) | busy for `delayMs` and something to ask about: an edit or a 2+ step plan; half the wait for 3+ steps; a second edit in projects whose median run is short | a fixed delay (quizzes about nothing, yanked back seconds later); guessing from the prompt's wording (unexplainable silent skips) |
+| When the quiz opens (0.3) | busy for `delayMs` and something to ask about: an edit or a 2+ step plan; half the wait for 3+ steps; a second edit in projects whose median run is short; after 30 s busy, open regardless (exploration runs can go minutes without an edit) | a fixed delay (quizzes about nothing, yanked back seconds later); guessing from the prompt's wording (unexplainable silent skips) |
 | Silencing the quiz | `z` twice, `--quiet`, per-project `quiet` | a single `z` (stray typing in the wrong screen silenced sessions, like `q` did for exit) |
 | Context for questions | ±10 lines around each of the last 3 edits' anchor lines, 100 lines max, redacted | whole files (cost, secrets); the diff only (shallow "why" questions) |
 | Bad questions | `b` writes `rating: "bad"`; every reader drops that question | deleting history lines (append-only log) |

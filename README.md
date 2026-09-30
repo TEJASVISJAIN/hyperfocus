@@ -126,7 +126,8 @@ was reverted or rewritten, so hyperfocus leaves it out.
 
 - **To the focus view:** once the agent has been busy for 8 seconds and there is something to ask about:
   its first edit, or a plan of two or more steps. A plan of three or more steps halves the wait. In a
-  project whose runs are usually short, it waits for a second edit. It never switches while you are
+  project whose runs are usually short, it waits for a second edit. After 30 seconds it opens anyway,
+  edit or not, with questions about the code the agent is reading. It never switches while you are
   typing. So a quick answer, or a run that only reads code, never interrupts you. The first time, an
   intro card explains the keys (`hyperfocus --intro` shows it again).
 - **Back to Claude:** the moment Claude finishes, asks for input (a permission prompt, a question) or
