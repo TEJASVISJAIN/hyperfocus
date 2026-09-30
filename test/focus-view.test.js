@@ -273,3 +273,19 @@ test('the agent is named on screen, so another agent reads right', () => {
   assert.match(text, /Codex finished/);
   assert.doesNotMatch(text, /Claude/);
 });
+
+test('w saves an answered question once, with the answer and how it went, and stays on the explanation', () => {
+  const saved = [];
+  const view = createFocusView({ onAnswer: () => {}, onSave: (entry) => void saved.push(entry) });
+  view.addQuestions([retryQuestion, attemptsQuestion]);
+  const render = () => screenText(view.render({ cols: 80, rows: 30, now: 0 }));
+  view.handleKey('w'); // nothing answered yet: not saved
+  assert.equal(saved.length, 0);
+  view.handleKey('1');
+  assert.match(render(), /w save/);
+  view.handleKey('w');
+  view.handleKey('w');
+  assert.deepEqual(saved.map(({ question, chosen, correct }) => [question.q, chosen, correct]), [['Why retry refreshToken?', 0, false]]);
+  assert.match(render(), /✓ saved/);
+  assert.match(render(), /Concurrent requests can race/);
+});

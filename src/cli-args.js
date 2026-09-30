@@ -1,5 +1,5 @@
 // hyperfocus accepts every `claude` argument; these few are its own and are removed before claude sees them.
-const OWN_FLAGS = new Set(['--no-auto', '--stats', '--notes', '--review', '--intro', '--quiet', '--here', '--md', '--brief', '--install-hook', '--uninstall-hook', '--doctor', '--demo']);
+const OWN_FLAGS = new Set(['--no-auto', '--stats', '--notes', '--review', '--intro', '--quiet', '--here', '--md', '--brief', '--install-hook', '--uninstall-hook', '--doctor', '--demo', '--saved']);
 
 // `hyperfocus codex …` and `hyperfocus gemini …` wrap another agent; everything after is its own.
 const AGENT_COMMANDS = new Set(['codex', 'gemini']);
@@ -21,6 +21,7 @@ export function parseFocusArgs(argv) {
     brief: argv.includes('--brief'),
     doctor: argv.includes('--doctor'),
     demo: argv.includes('--demo'),
+    saved: argv.includes('--saved'),
     installHook: argv.includes('--install-hook'),
     uninstallHook: argv.includes('--uninstall-hook'),
   };

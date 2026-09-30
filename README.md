@@ -76,6 +76,7 @@ not against the real CLIs yet. Please open an issue if a quiz never appears.
 | `↑`/`↓` (or `j`/`k`) and `Enter` | focus view | choose an option and answer |
 | `1`–`4` or click | focus view | answer straight away |
 | `s` | focus view | skip the question |
+| `w` | after answering | save the question, your answer and the explanation to your notebook |
 | `b` | focus view | a bad question: skip it unscored, never review it, and steer future questions away from it |
 | `z` `z` | focus view | quiet for the rest of this session: no more automatic quizzes (`Ctrl-]` still opens one) |
 | `l` | focus view | show or hide the live view: what Claude is doing right now |
@@ -150,6 +151,7 @@ was reverted or rewritten, so hyperfocus leaves it out.
 | `--doctor` | | check Node, Claude Code and its login, the terminal, the config, and one real question call |
 | `--intro` | | print the intro card again |
 | `--stats` | | print how you are doing, then exit |
+| `--saved` | | print the questions you saved in this project (`--all` for every project), then exit |
 | `--notes` | | print notes on the latest session in this project, then exit |
 | `--review` | | ask again the missed questions whose code is still here (`--md`: print them as a checklist) |
 | `--install-hook` / `--uninstall-hook` | | add or remove the `pre-push` hook that lists them before a push |

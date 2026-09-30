@@ -10,13 +10,14 @@ import { defaultChecks, formatDoctor, runDoctor } from '../src/doctor.js';
 import { INTRO_TITLE, introLines } from '../src/focus-view.js';
 import { formatStats, missedStillInCode, projectLabel, readInsights, readStats } from '../src/history.js';
 import { formatBrief, installHook, uninstallHook } from '../src/git-hook.js';
+import { defaultSavedPath, formatSaved, notebookPath, readSaved } from '../src/saved.js';
 import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
 import { prepareDemo } from '../src/demo/prepare-demo.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo } = parseFocusArgs(process.argv.slice(2));
+const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo, saved } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -37,6 +38,12 @@ if (intro) {
 }
 if (stats) {
   process.stdout.write(formatStats(readStats(), readInsights()));
+  process.exit(0);
+}
+if (saved) {
+  const all = process.argv.includes('--all');
+  const path = defaultSavedPath();
+  process.stdout.write(formatSaved(readSaved({ path, cwd: all ? undefined : process.cwd() })) + `\nNotebook: ${notebookPath(path)}\n`);
   process.exit(0);
 }
 if (notes) {

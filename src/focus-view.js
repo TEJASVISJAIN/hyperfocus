@@ -37,6 +37,7 @@ export const introLines = (agent = 'Claude') => [
   `Ctrl-]       switch between ${agent} and the quiz any time`,
   '↑↓ Enter     choose and answer, or press 1–4',
   's            skip a question',
+  'w            save an answered question to your notebook (hyperfocus --saved)',
   `l            show what ${agent} is doing right now`,
 ];
 
@@ -51,6 +52,8 @@ export const introLines = (agent = 'Claude') => [
  * - `onFollowUp({ question, chosen, ask, thread })` when the user asks their own follow-up;
  *   answer with `setFollowUpAnswer` or `setFollowUpFailed`
  * - `onBack()` / `onKeepGoing()` for the choice offered by `showFinished`
+ * - `onSave({ question, chosen, correct, thread })` when the user presses `w` on an answered question,
+ *   to keep it in their notebook; returns whether it was saved
  * - `onQuiet()` when the user presses `z`: no more automatic quizzes this session
  * - `onExit()` when the user asks to go back to Claude: Esc anywhere, or Enter while there is no
  *   question yet
@@ -67,6 +70,7 @@ export function createFocusView({
   onKeepGoing = undefined,
   onExit = undefined,
   onQuiet = undefined,
+  onSave = undefined,
   agentName = 'Claude', // what the agent is called on screen
   title = 'hyperfocus',
   backHint = `Esc back to ${agentName}`,
@@ -323,6 +327,12 @@ export function createFocusView({
         return next();
       }
       if (feedback) {
+        if (key === 'w' && onSave) {
+          if (feedback.saved) return;
+          const isCorrect = question.kind === 'predict' ? null : feedback.chosen === question.answer;
+          feedback.saved = onSave({ question, chosen: feedback.chosen, correct: isCorrect, thread: [...followUp.thread] }) !== false;
+          return;
+        }
         if (key === 'f' && followUp.pendingAsk === null) return void (followUp.draft = '');
         return next();
       }
@@ -440,8 +450,9 @@ export function createFocusView({
     }
     if (followUp.draft !== null) return [['enter', 'ask'], ['esc', 'cancel']];
     if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ['b', 'bad question'], ...live, ...quiet, ...back];
-    if (followUp.pendingAsk !== null) return [['any key', 'next question'], ...back];
-    return [['f', 'ask a follow-up'], ['any key', 'next question'], ...live, ...back];
+    const save = !onSave ? [] : feedback.saved ? [['✓', 'saved']] : [['w', 'save']];
+    if (followUp.pendingAsk !== null) return [...save, ['any key', 'next question'], ...back];
+    return [['f', 'ask a follow-up'], ...save, ['any key', 'next question'], ...live, ...back];
   }
 
   function renderFinished({ margin, inner }, cols) {

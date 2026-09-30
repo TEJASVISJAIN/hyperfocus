@@ -10,6 +10,7 @@ import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { buildRecap, reviewChecklist } from './recap.js';
 import { createScreen, peekLines } from './screen.js';
+import { saveQuestion } from './saved.js';
 import { readState, updateState } from './state.js';
 
 const TYPING_GRACE_MS = 2000;
@@ -64,6 +65,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     badQuestions: () => recentBadQuestions({ cwd }),
     redraw: () => screen.redrawFocus(),
     onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run) }),
+    onSave: (entry, run) => saveQuestion(entry, { cwd, files: changedFiles(run) }),
     onBack: () => {
       session.view.hideFinished();
       showRecapOrClaude('done');

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Save a question:** press `w` after answering to keep the question, your answer, whether you were
+  right, the explanation, the code it was about and any follow-up you asked. They pile up in a Markdown
+  notebook at `~/.hyperfocus/saved.md`; `hyperfocus --saved` prints this project's (`--all` for every
+  project).
+- **VS Code extension** (in `vscode/`): a hyperfocus panel with your stats, weak spots and saved
+  questions, updated live, and a button to start hyperfocus in a terminal.
+
 ## 0.5.1
 
 - A long run that only reads code ("check the entire app") now opens the quiz after 30 seconds, with

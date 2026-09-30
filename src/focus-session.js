@@ -18,6 +18,7 @@ export function createFocusSession({
   onBack = undefined,
   onExit = undefined,
   onQuiet = undefined,
+  onSave = undefined,
   config = DEFAULT_CONFIG,
   agent = claudeAgent,
   writer = { path: claudePath, adapter: agent.writer, model: config.model }, // who writes the questions
@@ -63,6 +64,7 @@ export function createFocusSession({
     onBack: () => onBack?.(),
     onExit: () => onExit?.(),
     onQuiet: onQuiet && (() => onQuiet()),
+    onSave: onSave && ((entry) => onSave(entry, log.run)),
   });
 
   function askForMoreIfNeeded() {
