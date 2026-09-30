@@ -40,9 +40,10 @@ Sleep 500ms
 Space
 Sleep 5s
 Type "1"
-Sleep 7s
-# The agent finished: back to it, with a recap.
-Enter
-Sleep 5s
-Enter
+Sleep 3s
+# Keep it: w saves the question, your answer and the explanation to your notebook.
+Type "w"
 Sleep 2.5s
+# The agent is done: Esc goes back to it, with a recap of the change.
+Escape
+Sleep 7s
