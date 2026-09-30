@@ -189,6 +189,15 @@ was reverted or rewritten, so hyperfocus leaves it out.
 
 A bad value is reported when hyperfocus starts, and that setting keeps its default.
 
+
+## VS Code
+
+The [hyperfocus extension](https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus) shows your stats, weak spots and saved questions in a sidebar, and starts hyperfocus in a terminal:
+
+```sh
+code --install-extension ddalus.hyperfocus
+```
+
 ## How it works
 
 - **Hooks, without touching your settings.** hyperfocus starts Claude with

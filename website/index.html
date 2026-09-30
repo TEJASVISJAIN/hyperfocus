@@ -374,6 +374,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
       <a href="#how">How it works</a>
       <a href="#agents">Agents</a>
       <a href="#features">Features</a>
+      <a href="#vscode">VS Code</a>
       <a href="#cost">Cost</a>
       <a href="#install">Install</a>
       <a href="#releases">What's new</a>
@@ -597,12 +598,22 @@ Wrapping refreshToken() in withRetry: 3 attempts.
           <tr><td><kbd>b</kbd></td><td>question</td><td>A bad question: skip it unscored, and steer future ones away from it</td></tr>
           <tr><td><kbd>z</kbd> <kbd>z</kbd></td><td>focus view</td><td>Quiet for the rest of this session</td></tr>
           <tr><td><kbd>f</kbd></td><td>after an answer</td><td>Ask your own follow-up</td></tr>
+          <tr><td><kbd>w</kbd></td><td>after an answer</td><td>Save the question, your answer and the explanation to your notebook (<code>hyperfocus --saved</code>)</td></tr>
           <tr><td><kbd>l</kbd></td><td>focus view</td><td>Show or hide the live view</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>focus view</td><td>Back to Claude. The question waits for next time.</td></tr>
           <tr><td><kbd>c</kbd></td><td>when Claude finishes</td><td>Keep going with the quiz instead of heading back</td></tr>
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<section class="block" id="vscode">
+  <div class="wrap">
+    <span class="kicker">VS Code</span>
+    <h2>Your learning, next to your code.</h2>
+    <p class="intro">The hyperfocus extension adds a sidebar with your streak, how often you're right, your weak spots, every question you saved with <kbd>w</kbd>, and the ones you missed lately. It updates as you answer and starts hyperfocus in a terminal with one click. It only reads <code>~/.hyperfocus</code> on your machine.</p>
+    <p class="reveal"><a class="btn" href="https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus" target="_blank" rel="noopener">Install from the VS Code Marketplace ↗</a> &nbsp; <code>code --install-extension ddalus.hyperfocus</code></p>
   </div>
 </section>
 
