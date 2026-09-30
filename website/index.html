@@ -354,6 +354,11 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition: none !important; }
   html { scroll-behavior: auto; }
 }
+.cost-grid { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.cost-grid .agent .big { font-size: var(--step-2, 2rem); font-weight: 700; margin: 6px 0 4px; }
+.cost-notes { margin-top: 28px; display: grid; gap: 10px; max-width: 760px; }
+.cost-notes p { margin: 0; }
+.cost-notes code, .cost-notes kbd { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -369,6 +374,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
       <a href="#how">How it works</a>
       <a href="#agents">Agents</a>
       <a href="#features">Features</a>
+      <a href="#cost">Cost</a>
       <a href="#install">Install</a>
       <a href="#releases">What's new</a>
       <a class="npm" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">npm ↗</a>
@@ -596,6 +602,26 @@ Wrapping refreshToken() in withRetry: 3 attempts.
           <tr><td><kbd>c</kbd></td><td>when Claude finishes</td><td>Keep going with the quiz instead of heading back</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="cost">
+  <div class="wrap">
+    <span class="kicker">What it costs</span>
+    <h2>Free to install. The questions use your plan.</h2>
+    <p class="intro">hyperfocus is MIT-licensed and free, with no account and no server. It writes the questions by asking your own coding agent, so they come out of your Claude subscription or API credit, the way anything else you ask Claude does. Here is exactly how much.</p>
+    <div class="cost-grid">
+      <article class="agent reveal"><h3>One batch of questions</h3><div class="big">≈ $0.004</div><p>Three questions from one short Claude Haiku call: about 1,000 tokens in and 600 out, measured on a real change. No tools, no MCP servers, no saved session, thinking off.</p></article>
+      <article class="agent reveal"><h3>One agent run</h3><div class="big">≈ $0.004–0.02</div><p>One to four batches, depending on how much the agent changes: a new batch comes after every few edits, or when you run out of questions. Each follow-up you ask is one more call about the same size.</p></article>
+      <article class="agent reveal"><h3>A busy day</h3><div class="big">≈ $0.15–0.60</div><p>About 30 agent runs. On Claude Pro or Max nothing is billed separately: it counts toward your usage limits, and Haiku calls this small barely move them.</p></article>
+    </div>
+    <div class="cost-notes reveal">
+      <p><strong>Your agent costs the same as before.</strong> hyperfocus doesn't add anything to its context or its prompts; it only listens to its hooks.</p>
+      <p><strong>With Codex or Gemini and no Claude Code,</strong> the agent writes the questions with its own default model on your plan. That is a larger model than Haiku, so each question costs more.</p>
+      <p><strong>Free to use:</strong> <code>--stats</code>, <code>--notes</code>, the recap and the pre-push list all come from your local history. <code>--review</code> re-asks saved questions without a call; only follow-ups there use one. <code>--doctor</code> makes one test call.</p>
+      <p><strong>To spend less:</strong> set <code>"questionsPerBatch"</code> lower in <code>~/.hyperfocus/config.json</code>, press <kbd>z</kbd> <kbd>z</kbd> to go quiet for a session, or run <code>hyperfocus --no-auto</code> and open the quiz yourself with <kbd>Ctrl-]</kbd>.</p>
+      <p style="opacity:.65">Prices are Claude Haiku API list prices on the day we measured; your figures will vary with the size of the change.</p>
     </div>
   </div>
 </section>
