@@ -1,7 +1,7 @@
 {
   "name": "hyperfocus",
-  "displayName": "hyperfocus",
-  "description": "Your hyperfocus stats, weak spots and saved questions, right in VS Code.",
+  "displayName": "hyperfocus \u2014 learn while your AI codes",
+  "description": "See your hyperfocus quiz stats, weak spots and saved questions next to your code. For Claude Code, Codex and Gemini CLI.",
   "version": "0.1.0",
   "publisher": "ddalus",
   "license": "MIT",
@@ -10,6 +10,7 @@
   },
   "categories": [
     "Education",
+    "AI",
     "Other"
   ],
   "main": "./extension.js",
@@ -78,5 +79,24 @@
     "url": "https://github.com/TEJASVISJAIN/hyperfocus-web"
   },
   "homepage": "https://tejasvisjain.github.io/hyperfocus-web/",
-  "icon": "media/icon.png"
+  "icon": "media/icon.png",
+  "keywords": [
+    "ai",
+    "claude",
+    "claude code",
+    "codex",
+    "gemini",
+    "quiz",
+    "learning",
+    "code review",
+    "copilot",
+    "agent"
+  ],
+  "galleryBanner": {
+    "color": "#0A7C8C",
+    "theme": "dark"
+  },
+  "bugs": {
+    "url": "https://github.com/TEJASVISJAIN/hyperfocus-web/issues"
+  }
 }
