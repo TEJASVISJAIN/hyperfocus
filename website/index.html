@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hyperfocus</title>
+<meta name="description" content="hyperfocus runs Claude Code and, while the agent works, quizzes you on the change it is making, so you stay in the terminal instead of reaching for your phone.">
+<meta property="og:title" content="hyperfocus">
+<meta property="og:description" content="Stay in the terminal while Claude works. A quiz about the change Claude is making, right where you are.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,300..900&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single focal column. The page is a lens: noise drifts at the edges, the terminal sits sharp in the middle. */
+:root {
+  --ground: #eef1f5;        /* cool paper, biased toward the accent */
+  --ground-2: #e3e8ee;
+  --ink: #14181e;
+  --ink-soft: #4a5260;
+  --rule: #cdd4dd;
+  --focus: #0a7c8c;         /* the ▸ selection cyan, deepened for paper */
+  --focus-ink: #ffffff;
+  --right: #1f8a4c;
+  --wrong: #c8364a;
+  --term-bg: #0d1116;       /* the terminal stays a terminal in both themes */
+  --term-fg: #d9dee6;
+  --term-dim: #6c7684;
+  --term-cyan: #3fd0dc;
+  --term-green: #4fd48a;
+  --term-red: #ff6b7d;
+  --term-yellow: #e8c35a;
+  --term-magenta: #d98ad9;
+  --term-inverse-bg: #d9dee6;
+  --term-inverse-fg: #0d1116;
+  --noise: #7f8a99;
+  --shadow: 0 30px 80px -30px rgba(20, 40, 60, 0.35);
+
+  --display: "Anybody", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.3rem;
+  --step-2: 1.75rem;
+  --step-3: clamp(2rem, 4vw, 2.75rem);
+  --step-4: clamp(2.6rem, 7.2vw, 5.4rem);
+  --gutter: clamp(16px, 4vw, 40px);
+  --measure: 65ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0f1318; --ground-2: #161b22; --ink: #e8ecf1; --ink-soft: #9aa4b2; --rule: #28303a;
+    --focus: #46d3e0; --focus-ink: #06222a; --right: #4fd48a; --wrong: #ff6b7d;
+    --term-bg: #090c10; --noise: #5d6775; --shadow: 0 30px 90px -30px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0f1318; --ground-2: #161b22; --ink: #e8ecf1; --ink-soft: #9aa4b2; --rule: #28303a;
+  --focus: #46d3e0; --focus-ink: #06222a; --right: #4fd48a; --wrong: #ff6b7d;
+  --term-bg: #090c10; --noise: #5d6775; --shadow: 0 30px 90px -30px rgba(0, 0, 0, 0.8);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.02; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+code, kbd, pre { font-family: var(--mono); }
+
+.wrap { width: 100%; max-width: 1120px; margin-inline: auto; padding-inline: var(--gutter); }
+
+/* ── Nav ─────────────────────────────────────────────── */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: color-mix(in srgb, var(--ground) 82%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent);
+}
+.nav .wrap { display: flex; align-items: center; gap: 24px; padding-block: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--mono); font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; }
+.brand .dot { width: 18px; height: 18px; flex: none; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; font-size: var(--step--1); }
+.nav-links a { text-decoration: none; color: var(--ink-soft); }
+.nav-links a:hover { color: var(--ink); }
+.nav-links .npm { color: var(--ink); border: 1px solid var(--rule); padding: 6px 12px; border-radius: 999px; }
+.nav-links .npm:hover { border-color: var(--focus); }
+@media (max-width: 640px) { .nav-links a:not(.npm) { display: none; } }
+
+/* ── Hero: rack focus ────────────────────────────────── */
+.hero { position: relative; isolation: isolate; padding-block: clamp(56px, 10vw, 120px) clamp(40px, 6vw, 72px); overflow: hidden; }
+.noise { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.chip {
+  position: absolute; white-space: nowrap;
+  font-family: var(--body); font-size: 0.9rem; color: var(--noise);
+  border: 1px solid color-mix(in srgb, var(--noise) 45%, transparent);
+  background: color-mix(in srgb, var(--ground-2) 70%, transparent);
+  padding: 7px 14px; border-radius: 14px;
+  filter: blur(4.5px); opacity: 0.75;
+  animation: rack-out 1.6s cubic-bezier(.2,.7,.2,1) both, drift var(--drift, 18s) ease-in-out infinite alternate;
+}
+.chip b { color: var(--ink-soft); font-weight: 700; }
+@keyframes rack-out { from { filter: blur(0); opacity: 1; } to { filter: blur(4.5px); opacity: 0.75; } }
+@keyframes drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(var(--dx, 14px), var(--dy, -18px), 0); } }
+
+.eyebrow { font-family: var(--mono); font-size: var(--step--1); color: var(--focus); letter-spacing: 0.04em; display: inline-flex; gap: 10px; align-items: center; }
+.eyebrow .spin { display: inline-block; width: 1ch; }
+.hero h1 {
+  font-size: var(--step-4); font-weight: 800; letter-spacing: -0.035em; font-stretch: 88%;
+  margin-block: 18px 22px; max-width: 13ch;
+  animation: rack-in 1.4s cubic-bezier(.2,.7,.2,1) both;
+}
+.hero h1 em { font-style: normal; color: var(--focus); font-stretch: 70%; }
+@keyframes rack-in {
+  from { filter: blur(10px); font-stretch: 130%; letter-spacing: 0.02em; opacity: 0.6; }
+  to { filter: blur(0); font-stretch: 88%; letter-spacing: -0.035em; opacity: 1; }
+}
+.lede { font-size: var(--step-1); color: var(--ink-soft); max-width: 44ch; line-height: 1.5; }
+.lede strong { color: var(--ink); }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; align-items: center; }
+.install {
+  display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%;
+  background: var(--term-bg); color: var(--term-fg); border-radius: 12px;
+  padding: 12px 12px 12px 18px; font-family: var(--mono); font-size: 0.95rem;
+  box-shadow: var(--shadow);
+}
+.install code { overflow-x: auto; white-space: nowrap; }
+.install .prompt { color: var(--term-cyan); user-select: none; }
+.copy {
+  font: 600 0.8rem var(--mono); border: 1px solid #2b333d; background: #151b22; color: var(--term-fg);
+  padding: 7px 12px; border-radius: 8px; cursor: pointer; flex: none;
+}
+.copy:hover { border-color: var(--term-cyan); }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 700;
+  padding: 13px 20px; border-radius: 12px; border: 1px solid var(--rule); background: var(--ground);
+}
+.btn:hover { border-color: var(--focus); color: var(--focus); }
+.meta { margin-top: 18px; font-size: var(--step--1); color: var(--ink-soft); }
+
+/* ── Terminal demo ───────────────────────────────────── */
+.demo { padding-block: 8px 72px; }
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 16px; box-shadow: var(--shadow);
+  border: 1px solid #1f262f; overflow: hidden; max-width: 100%;
+}
+.term-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #1a2129; }
+.term-bar i { width: 11px; height: 11px; border-radius: 50%; background: #2a323c; display: block; }
+.term-bar span { margin-left: 10px; font: 0.78rem var(--mono); color: var(--term-dim); }
+.term-screen {
+  font-family: var(--mono); font-size: clamp(0.62rem, 1.45vw, 0.9rem); line-height: 1.5;
+  padding: 18px 20px 22px; white-space: pre; overflow-x: auto; min-height: 31em;
+  transition: filter .35s ease, opacity .35s ease;
+}
+.term-screen.switching { filter: blur(3px); opacity: 0.4; }
+.t-dim { color: var(--term-dim); } .t-cyan { color: var(--term-cyan); } .t-green { color: var(--term-green); }
+.t-red { color: var(--term-red); } .t-yellow { color: var(--term-yellow); } .t-mag { color: var(--term-magenta); }
+.t-b { font-weight: 600; } .t-inv { background: var(--term-inverse-bg); color: var(--term-inverse-fg); }
+.timeline { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
+.step {
+  font: 0.82rem var(--mono); border: 1px solid var(--rule); color: var(--ink-soft); background: transparent;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer;
+}
+.step[aria-current="true"] { background: var(--focus); color: var(--focus-ink); border-color: var(--focus); }
+.play { margin-left: auto; font: 600 0.82rem var(--mono); background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 7px 4px; }
+.play:hover { color: var(--focus); }
+.demo-caption { margin-top: 14px; color: var(--ink-soft); font-size: var(--step--1); max-width: var(--measure); min-height: 3.2em; }
+
+/* ── Sections ────────────────────────────────────────── */
+section.block { padding-block: clamp(56px, 8vw, 96px); border-top: 1px solid var(--rule); }
+.kicker { font-family: var(--mono); font-size: var(--step--1); color: var(--focus); margin-bottom: 14px; display: block; }
+h2 { font-size: var(--step-3); font-weight: 750; letter-spacing: -0.03em; font-stretch: 90%; max-width: 20ch; }
+.intro { margin-top: 18px; color: var(--ink-soft); max-width: var(--measure); }
+
+.flow { list-style: none; padding: 0; margin: 44px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px; counter-reset: flow; }
+.flow li { counter-increment: flow; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.flow li::before {
+  content: counter(flow); font: 600 0.8rem var(--mono); color: var(--focus);
+  width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--focus); display: grid; place-items: center;
+}
+.flow h3 { font-size: var(--step-1); font-weight: 700; letter-spacing: -0.01em; font-stretch: 95%; }
+.flow p { color: var(--ink-soft); font-size: var(--step--1); }
+.flow code { font-size: 0.85em; color: var(--ink); }
+
+.kinds { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.kind { border: 1px solid var(--rule); border-radius: 14px; padding: 20px; display: grid; gap: 10px; align-content: start; background: var(--ground); min-width: 0; }
+.kind .tag { font: 600 0.78rem var(--mono); color: var(--focus); }
+.kind h3 { font-size: var(--step-1); font-weight: 700; font-stretch: 95%; }
+.kind p { color: var(--ink-soft); font-size: var(--step--1); }
+.kind pre { margin: 4px 0 0; background: var(--term-bg); color: var(--term-fg); border-radius: 8px; padding: 12px 14px; font-size: 0.76rem; line-height: 1.55; overflow-x: auto; }
+
+/* Still in the code */
+.stay { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: center; }
+@media (max-width: 820px) { .stay { grid-template-columns: 1fr; } }
+.stay-copy { display: grid; gap: 16px; color: var(--ink-soft); max-width: var(--measure); }
+.stay-copy strong { color: var(--ink); }
+.lanes { display: grid; gap: 12px; }
+.lane { display: grid; grid-template-columns: 5.5rem 1fr; gap: 14px; align-items: center; font-size: var(--step--1); }
+.lane .who { font-family: var(--mono); color: var(--ink-soft); font-size: 0.8rem; }
+.bar { border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 0.8rem; border: 1px solid var(--rule); display: flex; gap: 10px; align-items: center; min-width: 0; }
+.bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar.gone { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--wrong); opacity: 0.75; filter: blur(0.6px); }
+.bar.kept { border-color: var(--focus); color: var(--ink); }
+.bar .mark { flex: none; font-weight: 700; }
+.bar.gone .mark { color: var(--wrong); } .bar.kept .mark { color: var(--right); }
+
+/* Features */
+.features { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 36px 28px; }
+.feature { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.feature h3 { font-size: var(--step-1); font-weight: 700; font-stretch: 95%; }
+.feature p { color: var(--ink-soft); font-size: var(--step--1); }
+.feature code { color: var(--ink); font-size: 0.88em; }
+
+/* Keys */
+.keys { margin-top: 36px; border: 1px solid var(--rule); border-radius: 14px; overflow-x: auto; }
+.keys table { width: 100%; border-collapse: collapse; font-size: var(--step--1); min-width: 480px; }
+.keys td { padding: 14px 18px; border-top: 1px solid var(--rule); vertical-align: top; }
+.keys tr:first-child td { border-top: none; }
+.keys td:first-child { white-space: nowrap; width: 1%; }
+.keys td:nth-child(2) { color: var(--ink-soft); white-space: nowrap; width: 1%; }
+kbd {
+  font-size: 0.8rem; font-weight: 600; background: var(--ground-2); border: 1px solid var(--rule);
+  border-bottom-width: 2px; border-radius: 6px; padding: 2px 8px; color: var(--ink); white-space: nowrap;
+}
+
+/* Install */
+.install-grid { margin-top: 40px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 820px) { .install-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--term-bg); color: var(--term-fg); border-radius: 14px; padding: 20px 22px; font: 0.86rem/1.7 var(--mono); overflow-x: auto; white-space: pre; box-shadow: var(--shadow); }
+.need { display: grid; gap: 14px; color: var(--ink-soft); font-size: var(--step--1); max-width: var(--measure); }
+.need strong { color: var(--ink); }
+
+footer { border-top: 1px solid var(--rule); padding-block: 36px 48px; color: var(--ink-soft); font-size: var(--step--1); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
+footer .grow { margin-right: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="hyperfocus home">
+      <svg class="dot" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 1.5a8.5 8.5 0 0 1 0 17z" fill="var(--focus)"/></svg>
+      hyperfocus
+    </a>
+    <div class="nav-links">
+      <a href="#demo">Demo</a>
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a class="npm" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">npm ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="noise" aria-hidden="true" id="noise"></div>
+  <div class="wrap">
+    <span class="eyebrow"><span class="spin" id="spin">◑</span> claude is editing src/retry.ts · 0:14</span>
+    <h1>Stay in the terminal while <em>Claude</em> works.</h1>
+    <p class="lede">hyperfocus runs Claude Code for you. When the agent has been busy for a few seconds, your terminal switches to a short quiz about <strong>the change Claude is making right now</strong>. When Claude finishes, you're switched straight back.</p>
+    <div class="cta">
+      <div class="install">
+        <span class="prompt">$</span>
+        <code id="install-cmd">npm install -g @ddalus/hyperfocus</code>
+        <button class="copy" type="button" id="copy-install" data-copy="install-cmd">copy</button>
+      </div>
+      <a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">View on npm ↗</a>
+    </div>
+    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>. It uses your existing Claude Code login. v0.2.0 · MIT · macOS and Linux</p>
+  </div>
+</header>
+
+<section class="demo" id="demo" aria-label="A session with hyperfocus">
+  <div class="wrap">
+    <div class="term" role="img" aria-label="Animated terminal showing Claude Code working, then the hyperfocus quiz, then the return to Claude.">
+      <div class="term-bar"><i></i><i></i><i></i><span id="term-title">~/code/auth-service — hyperfocus</span></div>
+      <div class="term-screen" id="screen"></div>
+    </div>
+    <div class="timeline" id="timeline" role="group" aria-label="Demo steps"></div>
+    <p class="demo-caption" id="caption"></p>
+  </div>
+</section>
+
+<section class="block" id="how">
+  <div class="wrap">
+    <span class="kicker">How it works</span>
+    <h2>Claude keeps working. Your attention stays on the change.</h2>
+    <p class="intro">The minutes you spend waiting on an agent are usually spent somewhere else: a feed, a chat, your phone. hyperfocus uses them to walk you through what Claude is doing, so you understand the change before you review it.</p>
+    <ol class="flow">
+      <li><h3>Run it like claude</h3><p><code>hyperfocus</code> takes every argument <code>claude</code> does and runs the real Claude Code in your terminal. Nothing in your settings changes.</p></li>
+      <li><h3>The agent gets busy</h3><p>After 8 seconds of work, and 2 seconds after you stop typing, the screen switches to the focus view. Quick replies never interrupt you.</p></li>
+      <li><h3>Questions about this change</h3><p>A small Haiku call reads your prompt, the files Claude opened and the diffs it wrote, then asks why it's done this way and what could break.</p></li>
+      <li><h3>Straight back when it's done</h3><p>The moment Claude finishes or needs you, you're back, with a bell and a "while you were away" card listing what changed.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="block" id="features">
+  <div class="wrap">
+    <span class="kicker">Questions</span>
+    <h2>Four kinds of question, all about your diff.</h2>
+    <p class="intro">Code shown in a question is checked against the diff, so it's always code Claude really wrote. Options are shuffled, and questions get harder when you keep getting them right.</p>
+    <div class="kinds">
+      <article class="kind">
+        <span class="tag">why</span>
+        <h3>Why this way</h3>
+        <p>The reasoning behind the change: tradeoffs, failure modes, the edge cases it has to handle.</p>
+        <pre><span class="t-b">With a fixed 200ms backoff across
+many clients, what can go wrong?</span>
+<span class="t-cyan t-b">▸ 1  Synchronised retry waves</span>
+  2  Exponential slowdown</pre>
+      </article>
+      <article class="kind">
+        <span class="tag">spot the bug</span>
+        <h3>What does it miss</h3>
+        <p>A few real lines from the change, and what they get wrong or leave out.</p>
+        <pre><span class="t-green">+ for (let i = 0; i &lt; n; i++) {</span>
+<span class="t-green">+   await sleep(200);</span>
+<span class="t-cyan t-b">▸ 1  Jitter between attempts</span></pre>
+      </article>
+      <article class="kind">
+        <span class="tag">what does it do</span>
+        <h3>Read the code</h3>
+        <p>What a few lines Claude just wrote return for one specific input.</p>
+        <pre><span class="t-green">+ if (b === 0) throw new RangeError()</span>
+<span class="t-b">modulo(7, 0) does what?</span>
+<span class="t-cyan t-b">▸ 1  Throws a RangeError</span></pre>
+      </article>
+      <article class="kind">
+        <span class="tag">predict</span>
+        <h3>Guess the next move</h3>
+        <p>Which file will Claude edit next? Lock in a guess and keep going. Claude's next edit settles it.</p>
+        <pre><span class="t-b">Which file will Claude edit next?</span>
+<span class="t-b">● 2  src/auth.ts</span>
+<span class="t-green">✔ Prediction right</span></pre>
+      </article>
+    </div>
+
+    <div class="stay">
+      <div class="stay-copy">
+        <span class="kicker" style="margin:0">Still in the code?</span>
+        <h2>Change your mind. Your history follows.</h2>
+        <p>Say you had Claude build a circuit breaker, then changed course and had it use retries instead. Questions about the breaker are now about code that no longer exists.</p>
+        <p>Every question remembers the distinctive lines its change added. <strong>If those lines are gone from the file, the change was reverted or rewritten</strong>, and hyperfocus leaves it out of your review, your merge checklist and your session notes.</p>
+      </div>
+      <div class="lanes" aria-label="Example: a discarded change is left out, the kept one stays">
+        <div class="lane"><span class="who">prompt 1</span><div class="bar gone"><span class="mark">✘</span><span>class CircuitBreaker { … }</span></div></div>
+        <div class="lane"><span class="who">prompt 2</span><div class="bar kept"><span class="mark">✔</span><span>return withRetry(fetchToken, 3);</span></div></div>
+        <div class="lane"><span class="who">review</span><div class="bar kept"><span class="mark">▸</span><span>Why three attempts? · src/retry.ts</span></div></div>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature"><h3>A live view, when you want it</h3><p>Press <kbd>l</kbd> to see what the agent is reading, editing and running, and the last lines of Claude's own screen. It's hidden by default, so the question has the screen to itself.</p></div>
+      <div class="feature"><h3>Ask your own follow-up</h3><p>After any answer, press <kbd>f</kbd> and ask "why not a circuit breaker?". The answer uses the diff, the question and the thread so far.</p></div>
+      <div class="feature"><h3>Worth a look before you merge</h3><p>The recap lists the questions you got wrong whose code is still there: the parts of the change you don't fully understand yet.</p></div>
+      <div class="feature"><h3>Notes and review</h3><p><code>hyperfocus --notes</code> writes the session up as markdown for a PR description. <code>hyperfocus --review</code> asks again the questions you missed.</p></div>
+      <div class="feature"><h3>Your login, your costs</h3><p>No account and no API key. It runs your own <code>claude</code>, so it works with a subscription, an API key, Bedrock or Vertex. A batch of questions costs about $0.003.</p></div>
+      <div class="feature"><h3>Secrets stay out</h3><p>Tokens and passwords in diffs and commands are replaced with <code>[redacted]</code> before anything is stored, shown or sent. <code>.env</code> files and keys are never read.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="keys">
+  <div class="wrap">
+    <span class="kicker">Keys</span>
+    <h2>Everything is one key away.</h2>
+    <div class="keys">
+      <table>
+        <tbody>
+          <tr><td><kbd>Ctrl-]</kbd></td><td>anywhere</td><td>Switch between Claude and the focus view</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>question</td><td>Choose an option and answer. <kbd>1</kbd>–<kbd>4</kbd> or a click works too.</td></tr>
+          <tr><td><kbd>s</kbd></td><td>question</td><td>Skip the question</td></tr>
+          <tr><td><kbd>f</kbd></td><td>after an answer</td><td>Ask your own follow-up</td></tr>
+          <tr><td><kbd>l</kbd></td><td>focus view</td><td>Show or hide the live view</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>focus view</td><td>Back to Claude. The question waits for next time.</td></tr>
+          <tr><td><kbd>c</kbd></td><td>when Claude finishes</td><td>Keep going with the quiz instead of heading back</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="install">
+  <div class="wrap">
+    <span class="kicker">Install</span>
+    <h2>One command. No sign-up.</h2>
+    <div class="install-grid">
+      <div class="panel" aria-label="Install and use"><span class="t-dim"># install</span>
+<span class="t-cyan">$</span> npm install -g @ddalus/hyperfocus
+
+<span class="t-dim"># use it exactly like claude</span>
+<span class="t-cyan">$</span> hyperfocus
+<span class="t-cyan">$</span> hyperfocus --continue
+
+<span class="t-dim"># after a session</span>
+<span class="t-cyan">$</span> hyperfocus --notes
+<span class="t-cyan">$</span> hyperfocus --review
+<span class="t-cyan">$</span> hyperfocus --stats</div>
+      <div class="need">
+        <p><strong>You need Node.js 22 or newer and Claude Code, installed and logged in.</strong> If you already use <code>claude</code>, you're set.</p>
+        <p><strong>Linux:</strong> installing compiles one native dependency, so you need <code>python3</code>, <code>make</code> and a C++ compiler (<code>sudo apt install build-essential python3</code>). macOS needs nothing extra. Windows isn't supported yet.</p>
+        <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, which kinds of question, notifications, the mouse and the live view. Every key is optional.</p>
+        <p><a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">@ddalus/hyperfocus on npm ↗</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="grow">hyperfocus · MIT licensed · made for people who wait on agents</span>
+    <a href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">npm</a>
+    <a href="#top">Back to top</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── Hero noise: the things you'd otherwise be looking at ── */
+  const distractions = [
+    ['<b>12</b> new posts'], ['▶ Up next in 5'], ['<b>@you</b> was mentioned'], ['Trending: <b>#agents</b>'],
+    ['<b>3</b> unread messages'], ['Your order is on its way'], ['<b>Live</b> · 2.1k watching'],
+    ['Someone replied to your story'], ['<b>98</b> notifications'], ['Breaking news'], ['Streak: 4 days'], ['New episode available'],
+  ];
+  const spots = [[4, 10], [70, 6], [82, 34], [2, 58], [62, 74], [30, 88], [86, 62], [16, 32], [48, 4], [90, 88], [8, 84], [74, 48]];
+  const noise = document.getElementById('noise');
+  distractions.forEach(([html], index) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = html;
+    const [x, y] = spots[index % spots.length];
+    chip.style.left = x + '%';
+    chip.style.top = y + '%';
+    chip.style.setProperty('--dx', (index % 2 ? -1 : 1) * (10 + (index * 7) % 22) + 'px');
+    chip.style.setProperty('--dy', (index % 3 ? 1 : -1) * (8 + (index * 5) % 20) + 'px');
+    chip.style.setProperty('--drift', 14 + (index * 3) % 12 + 's');
+    chip.style.animationDelay = `${0.15 + index * 0.04}s, 0s`;
+    noise.appendChild(chip);
+  });
+
+  const spin = document.getElementById('spin');
+  const frames = ['◐', '◓', '◑', '◒'];
+  if (!reduced) {
+    let spinIndex = 0;
+    setInterval(() => (spin.textContent = frames[++spinIndex % frames.length]), 1000);
+  }
+
+  /* ── Copy buttons ── */
+  document.querySelectorAll('[data-copy]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = document.getElementById(button.dataset.copy);
+      const text = target.textContent.trim();
+      const done = () => { button.textContent = 'copied'; setTimeout(() => (button.textContent = 'copy'), 1600); };
+      const select = () => {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = 'press ⌘C';
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, select);
+      } catch {
+        select();
+      }
+    });
+  });
+
+  /* ── The demo: real hyperfocus screens, replayed ── */
+  // Markup: [c]cyan [g]green [r]red [d]dim [b]bold [y]yellow [m]magenta [i]inverse, closed by [/].
+  const paint = (line) =>
+    line
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\[(c|g|r|d|b|y|m|i|cb)\]/g, (_, tag) => `<span class="${{ c: 't-cyan', g: 't-green', r: 't-red', d: 't-dim', b: 't-b', y: 't-yellow', m: 't-mag', i: 't-inv', cb: 't-cyan t-b' }[tag]}">`)
+      .replace(/\[\/\]/g, '</span>');
+
+  const W = 66;
+  const pad = (text, width) => text + ' '.repeat(Math.max(0, width - [...text.replace(/\[\/?[a-z]*\]/g, '')].length));
+  const status = (left) => `[i]${pad(' ' + left, W - 19)}Esc back to Claude [/]`;
+  const box = (title, detail, body) => {
+    const inner = W - 8;
+    const plainLen = (s) => [...s.replace(/\[\/?[a-z]*\]/g, '')].length;
+    const fill = W - 8 - plainLen(title) - (detail ? plainLen(detail) + 2 : 0);
+    const top = `  [d]╭─ [/]${title} [d]${'─'.repeat(Math.max(1, fill))}[/]${detail ? ' ' + detail + ' ' : ''}[d]─╮[/]`;
+    const row = (text) => `  [d]│[/]  ${pad(text, inner)}  [d]│[/]`;
+    return [top, row(''), ...body.map(row), row(''), `  [d]╰${'─'.repeat(W - 4)}╯[/]`];
+  };
+  const claudeTop = ['[y]▗ ▗   ▖ ▖[/]  [b]Claude Code[/]', '[d]           ~/code/auth-service[/]', ''];
+  const inputBox = ['[d]' + '─'.repeat(W) + '[/]', '[b]❯[/] ', '[d]' + '─'.repeat(W) + '[/]'];
+
+  const question1 = (selected, answered) => {
+    const options = ['Tokens can expire between requests', 'The auth server rate-limits clients', 'Caching needs a warm-up call'];
+    const lines = options.map((option, index) => {
+      if (answered) return index === 0 ? `[g][b]✔[/] 1  ${option}[/]` : `[d]  ${index + 1}  ${option}[/]`;
+      return index === selected ? `[cb]▸ ${index + 1}  ${option}[/]` : `  ${index + 1}  ${option}`;
+    });
+    const body = ['[b]Why does refreshToken() need a retry at all?[/]', '', ...lines];
+    if (answered) body.push('', '[g][b]✔ Correct[/][/]', 'Concurrent requests race on an expired token; one', 'retry after refresh covers the window.');
+    return box('[b]Question 1[/]', answered ? '[g]●[/][d] 1/1[/]' : '', body);
+  };
+  const question2 = (bannerShown) => [
+    ...(bannerShown ? ['  [g][b]✔ Claude finished · 2 files changed · quiz 1/1[/][/]', '   [b]enter[/] [d]back to Claude[/]   [b]c[/] [d]keep going[/]', ''] : []),
+    ...box('[b]Question 2[/][d] · [/][c]spot the bug[/]', '[g]●[/][d] 1/1[/]', [
+      '[b]What does this retry loop miss?[/]',
+      '',
+      '  [g]+ for (let i = 0; i < attempts; i++) {[/]',
+      '  [g]+   await sleep(200);[/]',
+      '',
+      '[cb]▸ 1  Jitter: every client retries in lockstep[/]',
+      '  2  A maximum number of attempts',
+      '  3  Awaiting the sleep',
+    ]),
+  ];
+  const hints = (text) => ['   ' + text];
+
+  const scenes = [
+    {
+      label: 'Claude works',
+      caption: 'You ask Claude for a change and it starts reading files. You wait, which is usually when a phone comes out.',
+      title: '~/code/auth-service — hyperfocus',
+      lines: () => [
+        ...claudeTop,
+        '[b]❯[/] add retry with backoff to token refresh',
+        '',
+        '[m]⏺[/] Reading 2 files… [d](ctrl+o to expand)[/]',
+        '  [d]⎿  src/auth.ts, src/http.ts[/]',
+        '',
+        '[y]✻[/] [y]Thinking…[/] [d](6s · ↓ 820 tokens)[/]',
+        '',
+        ...inputBox,
+      ],
+      ms: 3200,
+    },
+    {
+      label: '8 seconds in',
+      caption: 'After 8 seconds of agent work, hyperfocus switches the terminal to a question about this change. Claude keeps working underneath.',
+      switching: true,
+      lines: () => [status('◑ hyperfocus · reading src/auth.ts · 0:08'), ' [d]Plan 0/3[/] [c]▱▱▱[/] [d]Wrapping refreshToken in withRetry[/]', '', ...question1(0, false), ...hints('[b]↑↓[/] [d]choose[/]   [b]enter[/] [d]answer[/]   [b]s[/] [d]skip[/]   [b]l[/] [d]live view[/]   [b]esc[/] [d]back[/]')],
+      ms: 2600,
+    },
+    {
+      label: 'You answer',
+      caption: 'Choose with the arrow keys and Enter. The explanation stays on screen, and f lets you ask your own follow-up.',
+      lines: () => [status('◓ hyperfocus · editing src/retry.ts · 0:03'), ' [d]Plan 1/3[/] [c]▰▱▱[/] [d]Adding backoff[/]', '', ...question1(0, true), ...hints('[b]f[/] [d]ask a follow-up[/]   [b]any key[/] [d]next question[/]   [b]esc[/] [d]back to Claude[/]')],
+      ms: 3200,
+    },
+    {
+      label: 'Spot the bug',
+      caption: 'Some questions quote the real lines Claude just wrote. The dots on the card are your answers this run.',
+      lines: () => [status('◒ hyperfocus · editing src/retry.ts · 0:09'), ' [d]Plan 2/3[/] [c]▰▰▱[/] [d]Wiring it into refreshToken[/]', '', ...question2(false), ...hints('[b]↑↓[/] [d]choose[/]   [b]enter[/] [d]answer[/]   [b]s[/] [d]skip[/]   [b]l[/] [d]live view[/]   [b]esc[/] [d]back[/]')],
+      ms: 3200,
+    },
+    {
+      label: 'Claude finishes',
+      caption: 'Claude is done. The question stays: Enter takes you back, c keeps the quiz going. A bell and a notification tell you either way.',
+      lines: () => [status('hyperfocus · done · 0:00'), '', ...question2(true)],
+      ms: 3000,
+    },
+    {
+      label: 'While you were away',
+      caption: 'Back in Claude, a recap shows what changed, your score, and what is worth a look before you merge.',
+      switching: true,
+      lines: () => [
+        status('hyperfocus · done · 0:02'),
+        '',
+        ...box('[b]While you were away[/]', '[d]Claude finished[/]', [
+          'Wrapped refreshToken() in withRetry: 3 attempts,',
+          '200ms backoff, retrying only on 401 and 503.',
+          '',
+          '[b]2 files changed[/]',
+          '[d]  src/retry.ts[/]',
+          '[d]  src/auth.ts[/]',
+          '',
+          'Quiz: 1/2 correct',
+          '',
+          '[y][b]Worth a look before you merge[/][/]',
+          '  [d]src/retry.ts[/]  What does this retry loop miss?',
+        ]),
+        ...hints('[b]any key[/] [d]back to Claude[/]'),
+      ],
+      ms: 3800,
+    },
+  ];
+
+  const screen = document.getElementById('screen');
+  const caption = document.getElementById('caption');
+  const timeline = document.getElementById('timeline');
+  let current = 0;
+  let timer = null;
+  let playing = !reduced;
+
+  const buttons = scenes.map((scene, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'step';
+    button.textContent = scene.label;
+    button.addEventListener('click', () => { show(index); if (playing) schedule(); });
+    timeline.appendChild(button);
+    return button;
+  });
+  const play = document.createElement('button');
+  play.type = 'button';
+  play.className = 'play';
+  timeline.appendChild(play);
+  const setPlayLabel = () => (play.textContent = playing ? '❚❚ pause' : '▶ play');
+  play.addEventListener('click', () => { playing = !playing; setPlayLabel(); if (playing) schedule(); else clearTimeout(timer); });
+
+  function show(index) {
+    current = index;
+    const scene = scenes[index];
+    const draw = () => { screen.innerHTML = scene.lines().map(paint).join('\n'); };
+    if (scene.switching && !reduced) {
+      screen.classList.add('switching');
+      setTimeout(() => { draw(); screen.classList.remove('switching'); }, 260);
+    } else draw();
+    caption.textContent = scene.caption;
+    buttons.forEach((button, buttonIndex) => button.setAttribute('aria-current', String(buttonIndex === index)));
+  }
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(() => { show((current + 1) % scenes.length); schedule(); }, scenes[current].ms);
+  }
+
+  // Rest on the question card, the frame that says the most; then play from the start.
+  show(1);
+  setPlayLabel();
+  if (playing) timer = setTimeout(() => { show(0); schedule(); }, 2400);
+})();
+</script>
+</body>
+</html>
