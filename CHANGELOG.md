@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- **Windows, experimental:** npm no longer refuses to install on Windows. hyperfocus finds `claude.exe`
+  or npm's `claude.cmd` through `PATHEXT`, starts the `.cmd` shim without cmd.exe (so arguments arrive
+  intact), uses a named pipe for hook events, and stops the PTY without signals. Keyboard only for now;
+  desktop notifications stay macOS-only. CI runs the suite on `windows-latest`.
+
 ## 0.3.0
 
 - **The quiz waits until there is something to ask about:** Claude's first edit, or a plan of two or

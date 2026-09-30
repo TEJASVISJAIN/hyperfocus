@@ -14,8 +14,9 @@ const onDisk = {
   '/repo/src/auth.ts': 'return withRetry(fetchToken, 3);\n',
 };
 const readFile = (path) => {
-  if (!(path in onDisk)) throw new Error('ENOENT');
-  return onDisk[path];
+  const key = path.replaceAll('\\', '/'); // keyed with /, joined with the platform separator
+  if (!(key in onDisk)) throw new Error('ENOENT');
+  return onDisk[key];
 };
 
 function logSession(path) {

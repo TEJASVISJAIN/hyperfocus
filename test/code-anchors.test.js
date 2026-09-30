@@ -60,8 +60,8 @@ test('without anchors nothing can be checked, so it does not count as in the cod
 
 test('relative files are read from the project they were recorded in', () => {
   const paths = [];
-  isStillInCode(anchored, { cwd: '/repo', readFile: (path) => (paths.push(path), '') });
-  isStillInCode({ ...anchored, file: '/elsewhere/a.ts' }, { cwd: '/repo', readFile: (path) => (paths.push(path), '') });
+  isStillInCode(anchored, { cwd: '/repo', readFile: (path) => (paths.push(path.replaceAll('\\', '/')), '') });
+  isStillInCode({ ...anchored, file: '/elsewhere/a.ts' }, { cwd: '/repo', readFile: (path) => (paths.push(path.replaceAll('\\', '/')), '') });
   assert.deepEqual(paths, ['/repo/src/auth.ts', '/elsewhere/a.ts']);
 });
 

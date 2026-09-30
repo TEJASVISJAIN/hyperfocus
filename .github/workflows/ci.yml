@@ -10,9 +10,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
+    # Windows support is experimental: its results are reported, but don't fail the build yet.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

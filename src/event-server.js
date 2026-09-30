@@ -8,10 +8,16 @@ import { toFocusEvent } from './hook-events.js';
 
 let serverCount = 0;
 
-// Listens on a unix socket for payloads from bin/hyperfocus-hook.js and emits them as FocusEvents.
-export async function startEventServer() {
-  const socketPath = join(tmpdir(), `hyperfocus-${process.pid}-${serverCount++}.sock`);
-  rmSync(socketPath, { force: true });
+// Listens on a unix socket (a named pipe on Windows) for payloads from bin/hyperfocus-hook.js and
+// emits them as FocusEvents.
+export async function startEventServer({ platform = process.platform } = {}) {
+  const name = `hyperfocus-${process.pid}-${serverCount++}`;
+  const isPipe = platform === 'win32';
+  const socketPath = isPipe ? `\\\\.\\pipe\\${name}` : join(tmpdir(), `${name}.sock`);
+  const removeSocket = () => {
+    if (!isPipe) rmSync(socketPath, { force: true });
+  };
+  removeSocket();
 
   const events = new EventEmitter();
   const server = createServer((socket) => {
@@ -34,7 +40,7 @@ export async function startEventServer() {
     events,
     close() {
       server.close();
-      rmSync(socketPath, { force: true });
+      removeSocket();
     },
   };
 }

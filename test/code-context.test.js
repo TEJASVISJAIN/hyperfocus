@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { surroundingCode } from '../src/code-context.js';
 
+// Paths are joined with the platform separator; the maps here are keyed with /.
+const posix = (path) => path.replaceAll('\\', '/');
 const numbered = (count, name = 'line') => Array.from({ length: count }, (_, index) => `${name} ${index + 1}`);
 const edit = (path, anchors) => ({ path, diff: '', anchors });
 const run = (edits) => ({ prompt: '', startedAt: 0, finished: false, reads: [], edits, commands: [], timeline: [] });
@@ -10,7 +12,7 @@ test('takes ten lines either side of the lines an edit added, from the file on d
   const lines = numbered(60);
   lines[29] = 'export async function withRetry(fn) {';
   const files = { '/repo/src/retry.ts': lines.join('\n') };
-  const [context] = surroundingCode(run([edit('src/retry.ts', ['export async function withRetry(fn) {'])]), { cwd: '/repo', readFile: (path) => files[path] });
+  const [context] = surroundingCode(run([edit('src/retry.ts', ['export async function withRetry(fn) {'])]), { cwd: '/repo', readFile: (path) => files[posix(path)] });
   assert.equal(context.file, 'src/retry.ts');
   const shown = context.text.split('\n');
   assert.equal(shown[0], 'line 20');
@@ -27,7 +29,7 @@ test('caps each edit at 40 lines and the whole context at 100, newest edits firs
     files[`/repo/${name}.ts`] = lines.join('\n');
     edits.push(edit(`${name}.ts`, [20, 60, 100].map((at) => `${name} anchor line number ${at}`)));
   }
-  const context = surroundingCode(run(edits), { cwd: '/repo', readFile: (path) => files[path] });
+  const context = surroundingCode(run(edits), { cwd: '/repo', readFile: (path) => files[posix(path)] });
   assert.deepEqual(context.map((part) => part.file), ['d.ts', 'c.ts', 'b.ts'], 'the last three edits, latest first');
   for (const part of context) assert.ok(part.text.split('\n').length <= 40);
   assert.ok(context.reduce((sum, part) => sum + part.text.split('\n').length, 0) <= 100);
@@ -45,7 +47,7 @@ test('skips sensitive files, files that are gone, and edits whose lines are no l
     edit('src/moved.ts', ['export function renamedAway() {']),
     edit('src/config.ts', ['export const retryAttempts = 3;']),
   ];
-  const context = surroundingCode(run(edits), { cwd: '/repo', readFile: (path) => { if (!(path in files)) throw new Error('ENOENT'); return files[path]; } });
+  const context = surroundingCode(run(edits), { cwd: '/repo', readFile: (path) => { if (!(posix(path) in files)) throw new Error('ENOENT'); return files[posix(path)]; } });
   assert.deepEqual(context.map((part) => part.file), ['src/config.ts']);
   assert.doesNotMatch(context[0].text, /ghp_/);
   assert.match(context[0].text, /retryAttempts/);

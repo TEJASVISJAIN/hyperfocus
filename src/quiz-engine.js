@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { surroundingCode } from './code-context.js';
 import { debugLog } from './debug-log.js';
 import { anchorFor } from './code-anchors.js';
+import { launchCommand } from './launch.js';
 import { DEFAULT_CONFIG } from './config.js';
 import { FOLLOW_UP_SYSTEM_PROMPT, SYSTEM_PROMPT, buildFollowUpPrompt, buildQuizPrompt, parseQuizReply, shuffleOptions } from './quiz-prompt.js';
 
@@ -33,7 +34,8 @@ export function probeQuestionWriter({ claudePath, model = DEFAULT_CONFIG.model, 
     const childEnv = { ...env, HYPERFOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
     delete childEnv.HYPERFOCUS_SOCK;
     const startedAt = Date.now();
-    const child = spawn(claudePath, modelArgs('Reply with the single word: ok', model), { env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+    const launch = launchCommand(claudePath, modelArgs('Reply with the single word: ok', model));
+    const child = spawn(launch.command, launch.args, { env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill(), timeoutMs);
@@ -126,7 +128,8 @@ export function createQuizEngine({
 
   function askModel(prompt, call, systemPrompt) {
     return new Promise((resolve) => {
-      const child = spawn(claudePath, modelArgs(systemPrompt, model), { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
+      const launch = launchCommand(claudePath, modelArgs(systemPrompt, model));
+      const child = spawn(launch.command, launch.args, { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
       call.child = child;
       let stdout = '';
       child.stdout.setEncoding('utf8');

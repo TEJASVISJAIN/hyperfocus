@@ -87,8 +87,9 @@ test('terminal reports (focus in/out, mouse, bracketed paste markers) are not ke
 const missed = (q, file, anchors) => ({ question: { kind: 'why', q, anchor: { file, anchors } } });
 const codeOnDisk = { '/repo/src/retry.ts': 'export async function withRetry(fn, attempts = 3) {\n' };
 const readFile = (path) => {
-  if (!(path in codeOnDisk)) throw new Error('ENOENT');
-  return codeOnDisk[path];
+  const key = path.replaceAll('\\', '/'); // keyed with /, joined with the platform separator
+  if (!(key in codeOnDisk)) throw new Error('ENOENT');
+  return codeOnDisk[key];
 };
 
 test('the checklist keeps missed questions whose code is still there, and drops discarded ones', () => {

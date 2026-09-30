@@ -65,7 +65,7 @@ test('hyperfocus --stats prints accuracy per project without starting claude', a
   const line = (cwd, correct) => JSON.stringify({ cwd, correct, skipped: false, question: 'q' });
   writeFileSync(join(home, '.hyperfocus', 'history.jsonl'), [line('/work/api', true), line('/work/api', true), line('/work/api', false), line('/work/web', false)].join('\n'));
 
-  const result = await runFocus(['--stats'], { HOME: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  const result = await runFocus(['--stats'], { HOME: home, USERPROFILE: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /\/work\/api\s+3\s+2 \(67%\)/);
   assert.match(result.stdout, /\/work\/web\s+1\s+0 \(0%\)/);
@@ -73,7 +73,8 @@ test('hyperfocus --stats prints accuracy per project without starting claude', a
 });
 
 test('hyperfocus --stats with no history explains how to get some', async () => {
-  const result = await runFocus(['--stats'], { HOME: tempDir(), HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  const home = tempDir();
+  const result = await runFocus(['--stats'], { HOME: home, USERPROFILE: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.equal(result.code, 0);
   assert.match(result.stdout, /No quiz answers recorded yet/);
 });
@@ -83,7 +84,7 @@ test('--stats shortens only paths inside the home folder to ~', async () => {
   mkdirSync(join(home, '.hyperfocus'));
   const line = (cwd) => JSON.stringify({ cwd, correct: true, skipped: false, question: 'q' });
   writeFileSync(join(home, '.hyperfocus', 'history.jsonl'), [line(join(home, 'app')), line(home + '2/app')].join('\n'));
-  const result = await runFocus(['--stats'], { HOME: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
+  const result = await runFocus(['--stats'], { HOME: home, USERPROFILE: home, HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' });
   assert.match(result.stdout, /~\/app\s/);
   assert.ok(result.stdout.includes(home + '2/app'), result.stdout);
   assert.doesNotMatch(result.stdout, /~2\/app/);
@@ -122,8 +123,8 @@ test('review brings back missed questions whose code is still there, and nothing
 
   const files = { '/repo/src/retry.ts': 'export async function withRetry(fn) {\n' };
   const readFile = (file) => {
-    if (!(file in files)) throw new Error('ENOENT');
-    return files[file];
+    if (!(file.replaceAll('\\', '/') in files)) throw new Error('ENOENT');
+    return files[file.replaceAll('\\', '/')];
   };
   const due = missedStillInCode({ cwd: '/repo', path, readFile });
   assert.deepEqual(due.map((entry) => entry.q), ['Why back off?', 'Why retry at all?'], 'newest first');

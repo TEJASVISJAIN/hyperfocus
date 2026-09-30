@@ -1,6 +1,7 @@
 import { spawn as spawnPlain } from 'node:child_process';
 import { constants as osConstants } from 'node:os';
 import pty from 'node-pty';
+import { launchCommand } from './launch.js';
 
 /** @type {NodeJS.Signals[]} */
 const FORWARDED_SIGNALS = ['SIGTERM', 'SIGHUP'];
@@ -9,7 +10,8 @@ const FORWARDED_SIGNALS = ['SIGTERM', 'SIGHUP'];
 // `onOutput` receives everything claude draws; the caller decides what reaches the real terminal.
 export function startClaudeInPty(claudePath, args, { env, onOutput, onExit }) {
   const { stdout } = process;
-  const child = pty.spawn(claudePath, args, {
+  const launch = launchCommand(claudePath, args);
+  const child = pty.spawn(launch.command, launch.args, {
     name: process.env.TERM || 'xterm-256color',
     cols: stdout.columns || 80,
     rows: stdout.rows || 24,
@@ -19,7 +21,8 @@ export function startClaudeInPty(claudePath, args, { env, onOutput, onExit }) {
   child.onData(onOutput);
   child.onExit(onExit);
   for (const signal of FORWARDED_SIGNALS) {
-    process.on(signal, () => child.kill(signal));
+    // node-pty on Windows has no signals: kill() with one throws there.
+    process.on(signal, () => (process.platform === 'win32' ? child.kill() : child.kill(signal)));
   }
   return child;
 }
@@ -45,7 +48,8 @@ export function exitCodeFor({ exitCode, signal }) {
 // Piped or scripted use (e.g. `echo hi | hyperfocus -p`) has no terminal to take over,
 // so hand stdio straight to claude.
 export function runPlain(claudePath, args) {
-  const child = spawnPlain(claudePath, args, { stdio: 'inherit' });
+  const launch = launchCommand(claudePath, args);
+  const child = spawnPlain(launch.command, launch.args, { stdio: 'inherit' });
   for (const signal of FORWARDED_SIGNALS) {
     process.on(signal, () => child.kill(signal));
   }

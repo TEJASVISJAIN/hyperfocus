@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join } from 'node:path';
+import { launchCommand } from './launch.js';
 import { probeQuestionWriter } from './quiz-engine.js';
 
 const MIN_NODE = 22;
@@ -53,10 +54,11 @@ export function checkTerminal(stdout, stdin) {
   return { status: 'ok', detail: size };
 }
 
-const run = (command, args, env) =>
-  new Promise((resolve) =>
-    execFile(command, args, { env, timeout: 15_000 }, (error, stdout, stderr) => resolve({ code: error ? (error.code ?? 1) : 0, stdout: String(stdout), stderr: String(stderr) })),
-  );
+const run = (path, pathArgs, env) =>
+  new Promise((resolve) => {
+    const { command, args } = launchCommand(path, pathArgs);
+    execFile(command, args, { env, timeout: 15_000 }, (error, stdout, stderr) => resolve({ code: error ? (error.code ?? 1) : 0, stdout: String(stdout), stderr: String(stderr) }));
+  });
 
 const onPath = (name, env) =>
   (env.PATH || '').split(delimiter).some((directory) => {

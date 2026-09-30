@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,9 +16,6 @@ export function prepareDemo(env = process.env) {
   const project = join(root, 'project');
   mkdirSync(project, { recursive: true });
   process.chdir(project);
-  // npm only marks `bin` files executable; the demo agent is started directly, like claude.
-  const mode = statSync(agentPath).mode;
-  if ((mode & 0o111) !== 0o111) chmodSync(agentPath, mode | 0o755);
   const speed = Number(env.HYPERFOCUS_DEMO_SPEED) || 1;
   return { agentPath, delayMs: DEMO_DELAY_MS / speed };
 }

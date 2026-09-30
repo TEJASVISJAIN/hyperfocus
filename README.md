@@ -33,7 +33,13 @@ and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus
 
 **Linux:** installing compiles one native dependency (`node-pty`), so you need `python3`, `make` and a
 C++ compiler (`sudo apt install build-essential python3` on Debian/Ubuntu). macOS needs nothing extra.
-Windows isn't supported yet.
+
+
+**Windows (experimental):** hyperfocus installs and runs in Windows Terminal with PowerShell. It
+finds `claude.exe` or npm's `claude.cmd`, and talks to its hooks over a named pipe. Use the keyboard:
+mouse clicks and desktop notifications may not work (the bell does). If the screen looks wrong after
+switching back to Claude, please open an issue with your terminal and Claude Code versions. It hasn't
+been tested on a real Windows machine yet, only in CI.
 
 ## Keys
 

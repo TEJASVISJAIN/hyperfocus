@@ -576,7 +576,7 @@ history with one kept and one discarded question.
 - **Linux:** node-pty 1.1.0 ships prebuilt binaries only for macOS and Windows, so on Linux it
   compiles on install (needs `python3`, `make` and a C++ compiler). Desktop notifications are
   macOS-only; the bell works everywhere.
-- **Windows:** untested. Named pipes would replace the unix socket.
+- **Windows (experimental):** a named pipe replaces the unix socket, `claude.cmd` is started as node plus its script (no cmd.exe quoting), and the PTY is killed without signals. Only CI has run it. Open questions for a real machine: whether ConPTY passes Claude's escape sequences through unchanged (the replay depends on it), whether mouse reports and Ctrl-] arrive in raw mode, and which shell Claude Code runs hook commands with.
 - **One session:** hyperfocus follows only the Claude process it started.
 - **Replay after a resize while away:** held-back output was laid out for the old size. The resize
   nudge makes Claude re-render, but a brief glitch is possible.
