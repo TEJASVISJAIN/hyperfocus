@@ -166,6 +166,7 @@ code, kbd, pre { font-family: var(--mono); }
   transition: filter .35s ease, opacity .35s ease;
 }
 .term-screen.switching { filter: blur(3px); opacity: 0.4; }
+.term-video { display: block; width: 100%; height: auto; background: var(--term-bg); }
 .t-dim { color: var(--term-dim); } .t-cyan { color: var(--term-cyan); } .t-green { color: var(--term-green); }
 .t-red { color: var(--term-red); } .t-yellow { color: var(--term-yellow); } .t-mag { color: var(--term-magenta); }
 .t-b { font-weight: 600; } .t-inv { background: var(--term-inverse-bg); color: var(--term-inverse-fg); }
@@ -285,18 +286,19 @@ footer .grow { margin-right: auto; }
       </div>
       <a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">View on npm ↗</a>
     </div>
-    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>. It uses your existing Claude Code login. v0.2.0 · MIT · macOS and Linux</p>
+    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>. It uses your existing Claude Code login. v0.3.0 · MIT · macOS and Linux</p>
   </div>
 </header>
 
 <section class="demo" id="demo" aria-label="A session with hyperfocus">
   <div class="wrap">
-    <div class="term" role="img" aria-label="Animated terminal showing Claude Code working, then the hyperfocus quiz, then the return to Claude.">
-      <div class="term-bar"><i></i><i></i><i></i><span id="term-title">~/code/auth-service — hyperfocus</span></div>
-      <div class="term-screen" id="screen"></div>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><span>hyperfocus --demo</span></div>
+      <video class="term-video" id="demo-video" src="hyperfocus-demo.mp4" poster="hyperfocus-demo-poster.png"
+        autoplay muted loop playsinline controls preload="metadata"
+        aria-label="Recording: an agent adds retry to token refresh while hyperfocus quizzes the developer on the change, then hands back with a recap."></video>
     </div>
-    <div class="timeline" id="timeline" role="group" aria-label="Demo steps"></div>
-    <p class="demo-caption" id="caption"></p>
+    <p class="demo-caption">A real recording of <code>hyperfocus --demo</code>: a scripted agent adds retries to token refresh, the quiz asks about the code it just wrote, the live view shows what it is doing, and the moment it finishes you are back with a recap.</p>
   </div>
 </section>
 
@@ -408,6 +410,9 @@ many clients, what can go wrong?</span>
       <div class="panel" aria-label="Install and use"><span class="t-dim"># install</span>
 <span class="t-cyan">$</span> npm install -g @ddalus/hyperfocus
 
+<span class="t-dim"># try it first: a scripted run, no Claude needed</span>
+<span class="t-cyan">$</span> hyperfocus --demo
+
 <span class="t-dim"># use it exactly like claude</span>
 <span class="t-cyan">$</span> hyperfocus
 <span class="t-cyan">$</span> hyperfocus --continue
@@ -415,11 +420,14 @@ many clients, what can go wrong?</span>
 <span class="t-dim"># after a session</span>
 <span class="t-cyan">$</span> hyperfocus --notes
 <span class="t-cyan">$</span> hyperfocus --review
-<span class="t-cyan">$</span> hyperfocus --stats</div>
+<span class="t-cyan">$</span> hyperfocus --stats
+
+<span class="t-dim"># something off?</span>
+<span class="t-cyan">$</span> hyperfocus --doctor</div>
       <div class="need">
         <p><strong>You need Node.js 22 or newer and Claude Code, installed and logged in.</strong> If you already use <code>claude</code>, you're set.</p>
         <p><strong>Linux:</strong> installing compiles one native dependency, so you need <code>python3</code>, <code>make</code> and a C++ compiler (<code>sudo apt install build-essential python3</code>). macOS needs nothing extra. Windows isn't supported yet.</p>
-        <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, which kinds of question, notifications, the mouse and the live view. Every key is optional.</p>
+        <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, which kinds of question, notifications, the mouse, the live view, and quiet mode per project. Every key is optional.</p>
         <p><a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">@ddalus/hyperfocus on npm ↗</a></p>
       </div>
     </div>
@@ -489,166 +497,12 @@ many clients, what can go wrong?</span>
     });
   });
 
-  /* ── The demo: real hyperfocus screens, replayed ── */
-  // Markup: [c]cyan [g]green [r]red [d]dim [b]bold [y]yellow [m]magenta [i]inverse, closed by [/].
-  const paint = (line) =>
-    line
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\[(c|g|r|d|b|y|m|i|cb)\]/g, (_, tag) => `<span class="${{ c: 't-cyan', g: 't-green', r: 't-red', d: 't-dim', b: 't-b', y: 't-yellow', m: 't-mag', i: 't-inv', cb: 't-cyan t-b' }[tag]}">`)
-      .replace(/\[\/\]/g, '</span>');
-
-  const W = 66;
-  const pad = (text, width) => text + ' '.repeat(Math.max(0, width - [...text.replace(/\[\/?[a-z]*\]/g, '')].length));
-  const status = (left) => `[i]${pad(' ' + left, W - 19)}Esc back to Claude [/]`;
-  const box = (title, detail, body) => {
-    const inner = W - 8;
-    const plainLen = (s) => [...s.replace(/\[\/?[a-z]*\]/g, '')].length;
-    const fill = W - 8 - plainLen(title) - (detail ? plainLen(detail) + 2 : 0);
-    const top = `  [d]╭─ [/]${title} [d]${'─'.repeat(Math.max(1, fill))}[/]${detail ? ' ' + detail + ' ' : ''}[d]─╮[/]`;
-    const row = (text) => `  [d]│[/]  ${pad(text, inner)}  [d]│[/]`;
-    return [top, row(''), ...body.map(row), row(''), `  [d]╰${'─'.repeat(W - 4)}╯[/]`];
-  };
-  const claudeTop = ['[y]▗ ▗   ▖ ▖[/]  [b]Claude Code[/]', '[d]           ~/code/auth-service[/]', ''];
-  const inputBox = ['[d]' + '─'.repeat(W) + '[/]', '[b]❯[/] ', '[d]' + '─'.repeat(W) + '[/]'];
-
-  const question1 = (selected, answered) => {
-    const options = ['Tokens can expire between requests', 'The auth server rate-limits clients', 'Caching needs a warm-up call'];
-    const lines = options.map((option, index) => {
-      if (answered) return index === 0 ? `[g][b]✔[/] 1  ${option}[/]` : `[d]  ${index + 1}  ${option}[/]`;
-      return index === selected ? `[cb]▸ ${index + 1}  ${option}[/]` : `  ${index + 1}  ${option}`;
-    });
-    const body = ['[b]Why does refreshToken() need a retry at all?[/]', '', ...lines];
-    if (answered) body.push('', '[g][b]✔ Correct[/][/]', 'Concurrent requests race on an expired token; one', 'retry after refresh covers the window.');
-    return box('[b]Question 1[/]', answered ? '[g]●[/][d] 1/1[/]' : '', body);
-  };
-  const question2 = (bannerShown) => [
-    ...(bannerShown ? ['  [g][b]✔ Claude finished · 2 files changed · quiz 1/1[/][/]', '   [b]enter[/] [d]back to Claude[/]   [b]c[/] [d]keep going[/]', ''] : []),
-    ...box('[b]Question 2[/][d] · [/][c]spot the bug[/]', '[g]●[/][d] 1/1[/]', [
-      '[b]What does this retry loop miss?[/]',
-      '',
-      '  [g]+ for (let i = 0; i < attempts; i++) {[/]',
-      '  [g]+   await sleep(200);[/]',
-      '',
-      '[cb]▸ 1  Jitter: every client retries in lockstep[/]',
-      '  2  A maximum number of attempts',
-      '  3  Awaiting the sleep',
-    ]),
-  ];
-  const hints = (text) => ['   ' + text];
-
-  const scenes = [
-    {
-      label: 'Claude works',
-      caption: 'You ask Claude for a change and it starts reading files. You wait, which is usually when a phone comes out.',
-      title: '~/code/auth-service — hyperfocus',
-      lines: () => [
-        ...claudeTop,
-        '[b]❯[/] add retry with backoff to token refresh',
-        '',
-        '[m]⏺[/] Reading 2 files… [d](ctrl+o to expand)[/]',
-        '  [d]⎿  src/auth.ts, src/http.ts[/]',
-        '',
-        '[y]✻[/] [y]Thinking…[/] [d](6s · ↓ 820 tokens)[/]',
-        '',
-        ...inputBox,
-      ],
-      ms: 3200,
-    },
-    {
-      label: '8 seconds in',
-      caption: 'After 8 seconds of agent work, hyperfocus switches the terminal to a question about this change. Claude keeps working underneath.',
-      switching: true,
-      lines: () => [status('◑ hyperfocus · reading src/auth.ts · 0:08'), ' [d]Plan 0/3[/] [c]▱▱▱[/] [d]Wrapping refreshToken in withRetry[/]', '', ...question1(0, false), ...hints('[b]↑↓[/] [d]choose[/]   [b]enter[/] [d]answer[/]   [b]s[/] [d]skip[/]   [b]l[/] [d]live view[/]   [b]esc[/] [d]back[/]')],
-      ms: 2600,
-    },
-    {
-      label: 'You answer',
-      caption: 'Choose with the arrow keys and Enter. The explanation stays on screen, and f lets you ask your own follow-up.',
-      lines: () => [status('◓ hyperfocus · editing src/retry.ts · 0:03'), ' [d]Plan 1/3[/] [c]▰▱▱[/] [d]Adding backoff[/]', '', ...question1(0, true), ...hints('[b]f[/] [d]ask a follow-up[/]   [b]any key[/] [d]next question[/]   [b]esc[/] [d]back to Claude[/]')],
-      ms: 3200,
-    },
-    {
-      label: 'Spot the bug',
-      caption: 'Some questions quote the real lines Claude just wrote. The dots on the card are your answers this run.',
-      lines: () => [status('◒ hyperfocus · editing src/retry.ts · 0:09'), ' [d]Plan 2/3[/] [c]▰▰▱[/] [d]Wiring it into refreshToken[/]', '', ...question2(false), ...hints('[b]↑↓[/] [d]choose[/]   [b]enter[/] [d]answer[/]   [b]s[/] [d]skip[/]   [b]l[/] [d]live view[/]   [b]esc[/] [d]back[/]')],
-      ms: 3200,
-    },
-    {
-      label: 'Claude finishes',
-      caption: 'Claude is done. The question stays: Enter takes you back, c keeps the quiz going. A bell and a notification tell you either way.',
-      lines: () => [status('hyperfocus · done · 0:00'), '', ...question2(true)],
-      ms: 3000,
-    },
-    {
-      label: 'While you were away',
-      caption: 'Back in Claude, a recap shows what changed, your score, and what is worth a look before you merge.',
-      switching: true,
-      lines: () => [
-        status('hyperfocus · done · 0:02'),
-        '',
-        ...box('[b]While you were away[/]', '[d]Claude finished[/]', [
-          'Wrapped refreshToken() in withRetry: 3 attempts,',
-          '200ms backoff, retrying only on 401 and 503.',
-          '',
-          '[b]2 files changed[/]',
-          '[d]  src/retry.ts[/]',
-          '[d]  src/auth.ts[/]',
-          '',
-          'Quiz: 1/2 correct',
-          '',
-          '[y][b]Worth a look before you merge[/][/]',
-          '  [d]src/retry.ts[/]  What does this retry loop miss?',
-        ]),
-        ...hints('[b]any key[/] [d]back to Claude[/]'),
-      ],
-      ms: 3800,
-    },
-  ];
-
-  const screen = document.getElementById('screen');
-  const caption = document.getElementById('caption');
-  const timeline = document.getElementById('timeline');
-  let current = 0;
-  let timer = null;
-  let playing = !reduced;
-
-  const buttons = scenes.map((scene, index) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'step';
-    button.textContent = scene.label;
-    button.addEventListener('click', () => { show(index); if (playing) schedule(); });
-    timeline.appendChild(button);
-    return button;
-  });
-  const play = document.createElement('button');
-  play.type = 'button';
-  play.className = 'play';
-  timeline.appendChild(play);
-  const setPlayLabel = () => (play.textContent = playing ? '❚❚ pause' : '▶ play');
-  play.addEventListener('click', () => { playing = !playing; setPlayLabel(); if (playing) schedule(); else clearTimeout(timer); });
-
-  function show(index) {
-    current = index;
-    const scene = scenes[index];
-    const draw = () => { screen.innerHTML = scene.lines().map(paint).join('\n'); };
-    if (scene.switching && !reduced) {
-      screen.classList.add('switching');
-      setTimeout(() => { draw(); screen.classList.remove('switching'); }, 260);
-    } else draw();
-    caption.textContent = scene.caption;
-    buttons.forEach((button, buttonIndex) => button.setAttribute('aria-current', String(buttonIndex === index)));
+  /* ── The demo: a real recording of `hyperfocus --demo` ── */
+  const video = document.getElementById('demo-video');
+  if (reduced) {
+    video.removeAttribute('autoplay');
+    video.pause();
   }
-  function schedule() {
-    clearTimeout(timer);
-    timer = setTimeout(() => { show((current + 1) % scenes.length); schedule(); }, scenes[current].ms);
-  }
-
-  // Rest on the question card, the frame that says the most; then play from the start.
-  show(1);
-  setPlayLabel();
-  if (playing) timer = setTimeout(() => { show(0); schedule(); }, 2400);
-})();
 </script>
 </body>
 </html>

@@ -7,27 +7,10 @@ switches to a short quiz about **the change Claude is making right now**: why it
 what could break, which edge cases matter. As soon as Claude finishes or needs you, the terminal
 switches back, with a recap of what you missed.
 
-```
- ◑ hyperfocus · editing src/retry.ts · 0:14                   Esc back to Claude
- Plan 2/4 ▰▰▱▱ Adding backoff
+![hyperfocus --demo: while an agent adds retries to token refresh, the quiz asks about the code it just wrote, then hands back with a recap](https://tejasvisjain.github.io/hyperfocus-web/hyperfocus-demo.gif)
 
-  ╭─ Question 3 · spot the bug ─────────────────────── ●●○ 1/2 ─╮
-  │                                                              │
-  │  What does this retry loop miss?                             │
-  │                                                              │
-  │    + for (let i = 0; i < attempts; i++) {                    │
-  │    +   await sleep(200);                                     │
-  │                                                              │
-  │  ▸ 1  Jitter: every client retries in lockstep               │
-  │    2  A maximum number of attempts                           │
-  │    3  Awaiting the sleep                                     │
-  │                                                              │
-  ╰──────────────────────────────────────────────────────────────╯
-   ↑↓ choose   enter answer   s skip   l live view   esc back to Claude
-
-  What's happening
-  Wrapping refreshToken() in withRetry with 3 attempts and a 200ms backoff.
-```
+Try it without touching a real project: `hyperfocus --demo` replays a scripted change through the real
+quiz. It doesn't need Claude and keeps nothing afterwards.
 
 ## Install
 
@@ -62,6 +45,8 @@ Windows isn't supported yet.
 | `↑`/`↓` (or `j`/`k`) and `Enter` | focus view | choose an option and answer |
 | `1`–`4` or click | focus view | answer straight away |
 | `s` | focus view | skip the question |
+| `b` | focus view | a bad question: skip it unscored, never review it, and steer future questions away from it |
+| `z` `z` | focus view | quiet for the rest of this session: no more automatic quizzes (`Ctrl-]` still opens one) |
 | `l` | focus view | show or hide the live view: what Claude is doing right now |
 | `f` | after an answer | ask your own follow-up question; Enter to send, Esc to cancel |
 | `Enter` / `c` | when Claude finishes mid-question | go back to Claude / keep going with the quiz |
@@ -91,8 +76,15 @@ itself; set `"live": true` in the config to always start with it open.
 - **Worth a look before you merge.** The "while you were away" card lists the questions you got wrong,
   as long as the code they are about is still there.
 - **`hyperfocus --notes`** prints the latest session in this project as markdown, ready for a PR
-  description: each prompt, what Claude did, and the files it changed.
-- **`hyperfocus --review`** asks again the questions you missed in this project.
+  description: each prompt, what Claude did, the files it changed, and a `- [ ]` checklist of the
+  questions you missed whose code is still there.
+- **`hyperfocus --review`** asks again the questions you missed in this project. `--review --md` prints
+  them as that checklist instead.
+- **`hyperfocus --install-hook`** adds a git `pre-push` hook that lists those questions before you push.
+  It never blocks a push, and `--uninstall-hook` removes exactly what it added.
+- **`hyperfocus --stats`** shows how you are doing: accuracy over all time and the last 30 days, per
+  question kind, in this project, the concepts you miss most (every question is tagged, for example
+  `concurrency` or `error-handling`), and your streak of days in a row.
 
 All three leave out changes that are no longer in the code. If you had Claude build X, then changed your
 mind and had it build Y instead, the questions and notes about X don't come back. Each question and each
@@ -101,8 +93,11 @@ was reverted or rewritten, so hyperfocus leaves it out.
 
 ## When it switches
 
-- **To the focus view:** after the agent has been busy for 8 seconds, and you haven't typed for 2 seconds.
-  Quick replies never interrupt you.
+- **To the focus view:** once the agent has been busy for 8 seconds and there is something to ask about:
+  its first edit, or a plan of two or more steps. A plan of three or more steps halves the wait. In a
+  project whose runs are usually short, it waits for a second edit. It never switches while you are
+  typing. So a quick answer, or a run that only reads code, never interrupts you. The first time, an
+  intro card explains the keys (`hyperfocus --intro` shows it again).
 - **Back to Claude:** the moment Claude finishes, asks for input (a permission prompt, a question) or
   you interrupt it with Esc. You get a terminal bell and, on macOS, a notification.
   - **In the middle of a question?** It stays on screen with a prompt: `Enter` goes back to Claude, `c`
@@ -117,10 +112,15 @@ was reverted or rewritten, so hyperfocus leaves it out.
 
 | Flag / variable | Default | |
 | --- | --- | --- |
-| `--no-auto` | off | never open the focus view by itself; `Ctrl-]` still works |
-| `--stats` | | print quiz answers and accuracy per project, then exit |
+| `--quiet` (or `--no-auto`) | off | never open the focus view by itself this session; `Ctrl-]` still works |
+| `--quiet --here` | | the same, always, in this project (saved in the config file) |
+| `--demo` | | a scripted run through the real quiz; no Claude needed, nothing kept |
+| `--doctor` | | check Node, Claude Code and its login, the terminal, the config, and one real question call |
+| `--intro` | | print the intro card again |
+| `--stats` | | print how you are doing, then exit |
 | `--notes` | | print notes on the latest session in this project, then exit |
-| `--review` | | ask again the missed questions whose code is still here |
+| `--review` | | ask again the missed questions whose code is still here (`--md`: print them as a checklist) |
+| `--install-hook` / `--uninstall-hook` | | add or remove the `pre-push` hook that lists them before a push |
 | `HYPERFOCUS_DELAY_MS` | `8000` | how long the agent must be busy before the focus view opens (beats the config file) |
 | `HYPERFOCUS_DEBUG=1` | off | log hook events and errors to `~/.hyperfocus/debug.log` |
 | `HYPERFOCUS_CLAUDE_BIN` | `claude` on `PATH` | the Claude Code executable to run |
@@ -138,9 +138,20 @@ was reverted or rewritten, so hyperfocus leaves it out.
   "kinds": ["why", "bug", "output", "predict"],
   "notifications": true,
   "mouse": true,
-  "live": false
+  "live": false,
+  "switchOn": "edit",
+  "quiet": false,
+  "animations": true,
+  "projects": {
+    "/Users/you/code/scratch": { "quiet": true }
+  }
 }
 ```
+
+- `switchOn`: `"edit"` waits for something to ask about, as described above. `"busy"` switches once the
+  agent has been busy for `delayMs`, like hyperfocus 0.2.
+- `animations: false` stops the spinner. Colours follow [`NO_COLOR`](https://no-color.org) and `TERM=dumb`.
+- `projects` overrides any setting for one project folder.
 
 A bad value is reported when hyperfocus starts, and that setting keeps its default.
 
@@ -155,8 +166,8 @@ A bad value is reported when hyperfocus starts, and that setting keeps its defau
 - **One terminal.** Claude runs in a pseudo-terminal that hyperfocus owns. The focus view is drawn on the
   alternate screen. Claude's output is held back while the quiz is up and replayed exactly when you
   return, so Claude's screen comes back intact.
-- **Questions.** A one-shot `claude -p --model haiku` call reads your prompt, the files Claude looked at
-  and the diffs it wrote, and returns a summary plus multiple-choice questions. That call has no tools,
+- **Questions.** A one-shot `claude -p --model haiku` call reads your prompt, the files Claude looked at,
+  the diffs it wrote and the code around them, and returns a summary plus multiple-choice questions. That call has no tools,
   no MCP, none of your hooks and no thinking, which keeps it to about 6 seconds and $0.003. It asks again
   on the first change, after every 3 new edits, or when you run out of questions.
 - **Follow-ups.** After an answer, press `f` and ask anything about it ("why not a circuit breaker?").
@@ -169,8 +180,8 @@ Diagrams, sequences, state machines and design decisions are in `docs/ARCHITECTU
 
 ## Privacy
 
-The quiz model sees what the main agent already sees: your prompt, file paths, and the diffs Claude
-wrote (up to about 20KB per run). It goes through your own Claude Code login, the same as Claude itself.
+The quiz model sees what the main agent already sees: your prompt, file paths, the diffs Claude wrote
+(up to about 20KB per run), and up to 100 lines of the code around its latest edits. It goes through your own Claude Code login, the same as Claude itself.
 Nothing is sent anywhere else.
 
 Before anything is stored, shown or sent, well-known token formats (Anthropic, OpenAI, GitHub, AWS,

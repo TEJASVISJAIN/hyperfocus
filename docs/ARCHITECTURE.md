@@ -151,23 +151,28 @@ flowchart TB
 
 | Module | Responsibility | Tested at |
 | --- | --- | --- |
-| `bin/hyperfocus.js` | entry point: `--stats`, `--notes`, `--review`, config problems, finding claude, TTY vs piped mode | CLI tests |
+| `bin/hyperfocus.js` | entry point: every flag (`--stats`, `--notes`, `--review`, `--doctor`, `--demo`, `--quiet --here`, hooks…), config problems, finding claude, TTY vs piped mode | CLI tests |
 | `bin/hyperfocus-hook.js` | forward a hook payload to the socket; never print, always exit 0 | `events.test.js` |
 | `src/app.js` | wires everything together; the only module that knows about all the others | end-to-end PTY tests |
 | `src/passthrough.js` | spawn claude in a PTY; raw mode; signals; exit codes; piped fallback | `passthrough.test.js` |
 | `src/screen.js` | which view is on screen; alternate screen; hold back and replay output; key routing; mouse modes; the peek at Claude's screen | `passthrough.test.js`, `screen.test.js` |
-| `src/auto-switch.js` | the switching rules (delay, typing grace, manual override) | `auto-switch.test.js` (fake clock) |
+| `src/auto-switch.js` | the switching rules (delay, something to ask about, plan size, short-run projects, typing grace, manual override, quiet) | `auto-switch.test.js` (fake clock) |
 | `src/event-server.js` + `hook-events.js` | unix socket server; hook payload → `FocusEvent` | `events.test.js` |
 | `src/focus-session.js` | routes events to the log, engine and view; status line labels | via end-to-end tests |
 | `src/activity-log.js` | per-run record of prompt, reads, diffs (with anchors), commands and a timeline, with size caps; Claude's task list | `activity-log.test.js` |
 | `src/redact.js` | hides tokens and secret values; recognises files that hold secrets | `redact.test.js` |
 | `src/code-anchors.js` | a change's anchor lines, and whether they are still in the file | `code-anchors.test.js` |
-| `src/config.js` + `data-dir.js` | `~/.hyperfocus/config.json` with per-setting validation; `HYPERFOCUS_HOME` | `config.test.js` |
-| `src/notes.js` | run log (`runs.jsonl`) and `--notes` | `notes.test.js` |
+| `src/config.js` + `data-dir.js` | `~/.hyperfocus/config.json` with per-setting validation and per-project overrides; `HYPERFOCUS_HOME` | `config.test.js` |
+| `src/state.js` | what hyperfocus remembers for itself (`state.json`: the intro was seen) | `state.test.js` |
+| `src/code-context.js` | the code around the latest edits, for the question prompt | `code-context.test.js` |
+| `src/git-hook.js` | install and remove the marked `pre-push` block; the brief review it prints | `git-hook.test.js` (real temp repos) |
+| `src/doctor.js` | `--doctor` checks, injectable | `doctor.test.js` |
+| `src/demo/` | `--demo`: the stand-in agent and its throwaway folders | end-to-end PTY test |
+| `src/notes.js` | run log (`runs.jsonl`, with durations), `--notes`, the Markdown checklist, the median run length | `notes.test.js` |
 | `src/review.js` | the `--review` screen | by hand (see below) |
 | `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; question kinds, grounding and validation; shuffling; difficulty | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
 | `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist | `focus-view*.test.js`, `recap.test.js` |
-| `src/history.js` | append answers; aggregate `--stats`; recent accuracy; missed questions still in the code | `history.test.js` |
+| `src/history.js` | append answers (with tags and ratings); `--stats` and its insights; recent accuracy; bad questions to avoid; missed questions still in the code | `history.test.js` |
 | `src/alert.js`, `debug-log.js`, `cli-args.js`, `claude-binary.js`, `spawn-helper-permissions.js` | small utilities | indirectly |
 
 ### Event vocabulary
@@ -557,6 +562,13 @@ history with one kept and one discarded question.
 | Live view on screen | hidden by default, `l` toggles, `"live": true` to start open | always on (noise under every question) |
 | Telling kept changes from discarded ones | anchor lines checked against the file on disk | git history (not every project, uncommitted work); asking the user |
 | Answer position | shuffled locally | trusting the model (it favours one slot) |
+| When the quiz opens (0.3) | busy for `delayMs` and something to ask about: an edit or a 2+ step plan; half the wait for 3+ steps; a second edit in projects whose median run is short | a fixed delay (quizzes about nothing, yanked back seconds later); guessing from the prompt's wording (unexplainable silent skips) |
+| Silencing the quiz | `z` twice, `--quiet`, per-project `quiet` | a single `z` (stray typing in the wrong screen silenced sessions, like `q` did for exit) |
+| Context for questions | ±10 lines around each of the last 3 edits' anchor lines, 100 lines max, redacted | whole files (cost, secrets); the diff only (shallow "why" questions) |
+| Bad questions | `b` writes `rating: "bad"`; every reader drops that question | deleting history lines (append-only log) |
+| Concept tags | 12 fixed tags, unknown ones dropped | free text (unreadable stats within a week) |
+| Streak | consecutive days with an answer | sessions (history only records sessions with answers, so every session is "in a row") |
+| Demo | a stand-in agent that fires the real hooks, writes real files in a temp project, and answers `-p` with canned JSON | special demo code paths in the app (the demo would stop showing the real thing) |
 | Language | plain Node ESM, JSDoc types checked by `tsc` | TypeScript build step (slower hook startup, more tooling) |
 
 ## Known limitations
@@ -566,7 +578,6 @@ history with one kept and one discarded question.
   macOS-only; the bell works everywhere.
 - **Windows:** untested. Named pipes would replace the unix socket.
 - **One session:** hyperfocus follows only the Claude process it started.
-- **Subagents:** `SubagentStop` isn't hooked, so subagent activity shows up only through its tool events.
 - **Replay after a resize while away:** held-back output was laid out for the old size. The resize
   nudge makes Claude re-render, but a brief glitch is possible.
 - **Transcript and context:** the quiz model sees at most about 20KB of diffs per run, not the whole

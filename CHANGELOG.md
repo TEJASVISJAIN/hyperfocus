@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0
+
+- **The quiz waits until there is something to ask about:** Claude's first edit, or a plan of two or
+  more steps, on top of the 8-second delay. A plan of three or more steps halves the wait; in projects
+  whose runs are usually short, it waits for a second edit. `"switchOn": "busy"` restores 0.2 timing.
+- An intro card the first time the quiz opens explains the keys; `hyperfocus --intro` shows it again.
+- **Quiet mode:** `--quiet` for a session, `z` `z` in the quiz for the rest of this one, `--quiet --here`
+  for a project, or `"quiet": true` everywhere. `Ctrl-]` still opens the quiz, and nothing else changes.
+  Any setting can now be overridden per project under `"projects"` in the config.
+- Questions see up to 100 lines of the code around Claude's latest edits (redacted like the diff), so
+  they can ask why a change was made, not only what it says.
+- `b` marks a bad question: skipped unscored, never reviewed, and used to steer later questions away.
+- Every question is tagged with a concept (`concurrency`, `error-handling`, …). `--stats` now shows
+  accuracy over the last 30 days, per kind, in this project, the concepts you miss most, and your streak.
+- `--notes` ends with a `- [ ]` checklist of missed questions still in the code; `--review --md` prints it.
+- `hyperfocus --install-hook` adds a git `pre-push` hook that lists them before a push. It never blocks.
+- `hyperfocus --doctor` checks Node, Claude Code and its login, node-pty, the terminal, notifications,
+  the config and the data folder, and makes one real question call.
+- `hyperfocus --demo` replays a scripted change through the real quiz: no Claude needed, nothing kept.
+- `NO_COLOR` and `TERM=dumb` turn colours off; `"animations": false` stops the spinner.
+
 ## 0.2.0
 
 - **More kinds of questions:** spot the bug and what-does-it-do questions show real lines from the diff
