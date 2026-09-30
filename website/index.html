@@ -113,7 +113,7 @@ code, kbd, pre { font-family: var(--mono); }
   background: color-mix(in srgb, var(--ground-2) 70%, transparent);
   padding: 7px 14px; border-radius: 14px;
   filter: blur(4.5px); opacity: 0.75;
-  animation: rack-out 3.2s cubic-bezier(.45,0,.2,1) both, drift var(--drift, 18s) ease-in-out infinite alternate;
+  animation: rack-out 2.2s cubic-bezier(.45,0,.2,1) both, drift var(--drift, 18s) ease-in-out infinite alternate;
 }
 .chip b { color: var(--ink-soft); font-weight: 700; }
 /* Sharp and loud first, so you see them go: attention leaving the noise. */
@@ -129,7 +129,7 @@ code, kbd, pre { font-family: var(--mono); }
 .hero h1 {
   font-size: var(--step-4); font-weight: 800; letter-spacing: -0.035em; font-stretch: 88%;
   margin-block: 18px 22px; max-width: 13ch;
-  animation: rack-in 2.4s cubic-bezier(.2,.7,.2,1) 0.9s both;
+  animation: rack-in 1.8s cubic-bezier(.2,.7,.2,1) 0.5s both;
 }
 .hero h1 em { font-style: normal; color: var(--focus); font-stretch: 70%; }
 @keyframes rack-in {
@@ -323,6 +323,28 @@ h3 .badge { margin-left: 8px; font-stretch: 100%; }
 .duo figcaption { margin-top: 10px; color: var(--ink-soft); font-size: var(--step--1); }
 figure { margin: 0; min-width: 0; }
 
+/* ── What's new ── */
+.whatsnew { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px; text-decoration: none; font-size: var(--step--1); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 14px 5px 6px; color: var(--ink-soft); background: color-mix(in srgb, var(--ground) 80%, transparent); transition: border-color .2s ease; }
+.whatsnew:hover { border-color: var(--focus); color: var(--ink); }
+.whatsnew b { font: 600 0.72rem var(--mono); background: var(--focus); color: var(--focus-ink); padding: 3px 9px; border-radius: 999px; }
+.releases { margin-top: 40px; display: grid; gap: 14px; }
+.release { border: 1px solid var(--rule); border-radius: 14px; background: var(--ground); overflow: hidden; }
+.release summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 12px; padding: 16px 20px; font-family: var(--display); font-weight: 750; font-size: var(--step-1); font-stretch: 92%; }
+.release summary::-webkit-details-marker { display: none; }
+.release summary::after { content: '+'; margin-left: auto; font: 400 1.2rem var(--mono); color: var(--ink-soft); }
+.release[open] summary::after { content: '−'; }
+.release summary .latest { font: 600 0.7rem var(--mono); color: var(--right); border: 1px solid color-mix(in srgb, var(--right) 45%, transparent); padding: 2px 8px; border-radius: 999px; }
+.release ul { margin: 0; padding: 0 22px 18px 40px; display: grid; gap: 8px; color: var(--ink-soft); font-size: var(--step--1); }
+.release li strong { color: var(--ink); }
+.release code { color: var(--ink); font-size: 0.88em; }
+.releases-more { margin-top: 16px; font-size: var(--step--1); color: var(--ink-soft); }
+
+/* Code on the page wraps instead of scrolling sideways, and shows === as typed, not as a ligature. */
+code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
+.kind pre, .panel, .duo .panel, .agent .cmd { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
+.stats .row { min-width: 0; grid-template-columns: minmax(6.5rem, 9.5rem) 1fr 4.2rem; }
+.stats { overflow-x: visible; }
+
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; filter: none; transform: none; }
   .runline .fill { width: 100%; } .runline .zone, .runline .tick { opacity: 1; }
@@ -348,6 +370,7 @@ figure { margin: 0; min-width: 0; }
       <a href="#agents">Agents</a>
       <a href="#features">Features</a>
       <a href="#install">Install</a>
+      <a href="#releases">What's new</a>
       <a class="npm" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">npm ↗</a>
     </div>
   </div>
@@ -356,6 +379,7 @@ figure { margin: 0; min-width: 0; }
 <header class="hero" id="top">
   <div class="noise" aria-hidden="true" id="noise"></div>
   <div class="wrap">
+    <a class="whatsnew" href="#releases" id="whatsnew" hidden><b id="whatsnew-version">new</b><span id="whatsnew-text">See what's new</span> →</a><br>
     <span class="eyebrow"><span class="spin" id="spin">◑</span> <span id="eyebrow-agent">claude</span> is editing src/retry.ts · 0:14</span>
     <h1>Stay in the terminal while <span class="agent-word" id="agent-word">Claude</span> works.</h1>
     <p class="lede">hyperfocus runs your coding agent for you. Once it starts changing code, your terminal switches to a short quiz about <strong>the change it is making right now</strong>. The moment it finishes, you're switched straight back, with a recap.</p>
@@ -448,8 +472,7 @@ figure { margin: 0; min-width: 0; }
         <span class="tag">why</span>
         <h3>Why this way</h3>
         <p>The reasoning behind the change: tradeoffs, failure modes, the edge cases it has to handle.</p>
-        <pre><span class="t-b">With a fixed 200ms backoff across
-many clients, what can go wrong?</span>
+        <pre><span class="t-b">With a fixed 200ms backoff across many clients, what can go wrong?</span>
 <span class="t-cyan t-b">▸ 1  Synchronised retry waves</span>
   2  Exponential slowdown</pre>
       </article>
@@ -612,6 +635,16 @@ Wrapping refreshToken() in withRetry: 3 attempts.
   </div>
 </section>
 
+<section class="block" id="releases">
+  <div class="wrap">
+    <span class="kicker">What's new</span>
+    <h2>Release notes.</h2>
+    <p class="intro">Straight from the changelog of the version on npm, so it's always what you'd actually install.</p>
+    <div class="releases" id="release-list"><p class="releases-more">Loading the changelog…</p></div>
+    <p class="releases-more" id="releases-more" hidden></p>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     <span class="grow">hyperfocus · MIT licensed · made for people who wait on agents</span>
@@ -643,7 +676,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
     chip.style.setProperty('--dx', (index % 2 ? -1 : 1) * (10 + (index * 7) % 22) + 'px');
     chip.style.setProperty('--dy', (index % 3 ? 1 : -1) * (8 + (index * 5) % 20) + 'px');
     chip.style.setProperty('--drift', 14 + (index * 3) % 12 + 's');
-    chip.style.animationDelay = `${1.1 + index * 0.22}s, 0s`; // held sharp for a moment, then one by one
+    chip.style.animationDelay = `${0.7 + index * 0.12}s, 0s`; // held sharp for a moment, then one by one
     noise.appendChild(chip);
   });
 
@@ -740,6 +773,39 @@ Wrapping refreshToken() in withRetry: 3 attempts.
       badges(version);
     })
     .catch(() => {});
+
+  /* ── Release notes: the changelog inside the published package ── */
+  const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const inline = (text) => escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  const SHOWN = 4;
+  fetch('https://unpkg.com/@ddalus/hyperfocus/CHANGELOG.md')
+    .then((response) => (response.ok ? response.text() : Promise.reject()))
+    .then((markdown) => {
+      const releases = [];
+      for (const line of markdown.split('\n')) {
+        const heading = line.match(/^## (\S+)/);
+        if (heading) releases.push({ version: heading[1], items: [] });
+        else if (releases.length && /^- /.test(line)) releases.at(-1).items.push(line.slice(2));
+        else if (releases.length && /^\s+\S/.test(line) && releases.at(-1).items.length) releases.at(-1).items[releases.at(-1).items.length - 1] += ' ' + line.trim();
+      }
+      if (!releases.length) throw new Error('empty');
+      const list = document.getElementById('release-list');
+      list.innerHTML = releases.slice(0, SHOWN).map((release, index) =>
+        `<details class="release"${index === 0 ? ' open' : ''}><summary>v${escapeHtml(release.version)}${index === 0 ? ' <span class="latest">latest</span>' : ''}</summary><ul>${release.items.map((item) => `<li>${inline(item)}</li>`).join('')}</ul></details>`).join('');
+      if (releases.length > SHOWN) {
+        const more = document.getElementById('releases-more');
+        more.hidden = false;
+        more.innerHTML = `Older: ${releases.slice(SHOWN).map((release) => 'v' + escapeHtml(release.version)).join(', ')}. Full history in <code>CHANGELOG.md</code> in the package.`;
+      }
+      const [latest] = releases;
+      document.getElementById('whatsnew-version').textContent = `v${latest.version}`;
+      const summary = latest.items[0].replace(/\*\*|`/g, '').split(/[:.]/)[0];
+      document.getElementById('whatsnew-text').textContent = summary.length > 60 ? "See what's new" : summary;
+      document.getElementById('whatsnew').hidden = false;
+    })
+    .catch(() => {
+      document.getElementById('release-list').innerHTML = '<p class="releases-more">Release notes are in <code>CHANGELOG.md</code>, included in the npm package.</p>';
+    });
 })();
 </script>
 </body>
