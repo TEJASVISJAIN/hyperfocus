@@ -10,6 +10,7 @@ import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { buildRecap, reviewChecklist } from './recap.js';
 import { createScreen, peekLines } from './screen.js';
+import { readState, updateState } from './state.js';
 
 const TYPING_GRACE_MS = 2000;
 const CLOCK_TICK_MS = 1000;
@@ -88,7 +89,12 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
 
   let lastNeedsInputMessage = '';
   let visit = { openedAt: 0, answeredBefore: 0 };
+  let introPending = !readState().introSeenAt;
   const openFocus = () => {
+    if (introPending) {
+      introPending = false;
+      session.view.showIntro(() => updateState({ introSeenAt: new Date().toISOString() }));
+    }
     visit = { openedAt: Date.now(), answeredBefore: session.view.score.answered };
     screen.showFocus();
   };

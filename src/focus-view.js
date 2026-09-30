@@ -27,6 +27,19 @@ const UP_KEYS = new Set(['\x1b[A', '\x1bOA', 'k']);
 const DOWN_KEYS = new Set(['\x1b[B', '\x1bOB', 'j']);
 const MAX_PLAN_CELLS = 10;
 
+export const INTRO_TITLE = 'Welcome to hyperfocus';
+// Shown the first time the quiz takes the screen, and by `hyperfocus --intro`.
+export const INTRO_LINES = [
+  'Claude is busy, so hyperfocus switched to a quiz about the change it is making.',
+  'The moment Claude finishes or needs you, you are back in Claude with a recap.',
+  '',
+  'Esc          back to Claude now',
+  'Ctrl-]       switch between Claude and the quiz any time',
+  '↑↓ Enter     choose and answer, or press 1–4',
+  's            skip a question',
+  'l            show what Claude is doing right now',
+];
+
 /**
  * The quiz screen shown while the agent works: a status line, Claude's plan, the running summary,
  * one question at a time, and below it a live feed of the agent's steps and a peek at Claude's own
@@ -74,6 +87,7 @@ export function createFocusView({
   let selected = 0; // the option the arrow keys point at
   let selectedFor = null;
   let recap = null; // { card, onDismiss } while the "while you were away" card is up
+  let intro = null; // { onDismiss } while the first-run intro is up
   let finished = null; // { reason, changedFiles, score } while offering "back to Claude or keep going"
   let pendingPredictions = []; // { question, chosen } waiting for Claude's next edit
   let result = null; // { text, good, at }: how the latest prediction turned out
@@ -168,6 +182,9 @@ export function createFocusView({
     hideRecap() {
       recap = null;
     },
+    showIntro(onDismiss) {
+      intro = { onDismiss };
+    },
     showFinished(details) {
       finished = details;
     },
@@ -257,6 +274,12 @@ export function createFocusView({
       // Other escape sequences here are terminal reports (focus in/out, paste markers) or
       // keys we don't use, never a deliberate "any key".
       if (!arrow && key.length > 1 && key.startsWith(ESC)) return;
+      if (intro) {
+        const { onDismiss } = intro;
+        intro = null;
+        onDismiss();
+        return key === ESC && onExit ? onExit() : undefined;
+      }
       if (recap) {
         const { onDismiss } = recap;
         recap = null;
@@ -303,6 +326,11 @@ export function createFocusView({
       const box = { margin, cardWidth, inner };
       const header = [statusLine(cols, now), ...planLine(cols - 2), ...resultLine(cols - 2, now), ''];
 
+      if (intro) {
+        const body = INTRO_LINES.flatMap((line) => (line ? wrap(line, inner) : ['']));
+        const screen = [...header, ...card(box, BOLD + INTRO_TITLE + RESET, '', body), ...hintRow([['any key', 'start']], cols, margin)];
+        return finish(screen.slice(0, rows));
+      }
       if (recap) {
         const { title: recapTitle, detail, lines: body } = renderRecap(recap.card, { width: inner });
         const screen = [...header, ...card(box, recapTitle, detail, body), ...hintRow([['any key', 'back to Claude']], cols, margin)];
@@ -339,7 +367,7 @@ export function createFocusView({
   // marked count: a peek or summary line that happens to read "1) …" is not an option.
   function finish(screen) {
     clickRows = new Map();
-    const optionsClickable = current() && !feedback && !recap;
+    const optionsClickable = current() && !feedback && !recap && !intro;
     const lines = screen.map((line, index) => {
       if (!line.startsWith(OPTION_MARK)) return line;
       if (optionsClickable) clickRows.set(index + 1, line[1]);

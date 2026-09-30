@@ -182,3 +182,19 @@ test('the card shows a dot per answer this run: right, wrong and skipped', () =>
   assert.match(screenText(rendered), /●●○ 1\/2 ─╮/);
   assert.match(rendered, /\x1b\[32m●.*\x1b\[31m●.*\x1b\[2m○/, 'green, red, then dim');
 });
+
+test('the intro card comes before the first question and any key dismisses it', () => {
+  const { view, answers, render } = setup();
+  let dismissed = 0;
+  view.showIntro(() => dismissed++);
+  view.addQuestions([retryQuestion]);
+  const text = screenText(render());
+  assert.match(text, /╭─ Welcome to hyperfocus/);
+  assert.match(text, /Esc/);
+  assert.match(text, /Ctrl-\]/);
+  assert.doesNotMatch(text, /Why retry refreshToken\?/);
+  view.handleKey('2');
+  assert.equal(dismissed, 1);
+  assert.deepEqual(answers, [], 'the key that dismisses the intro answers nothing');
+  assert.match(screenText(render()), /Why retry refreshToken\?/);
+});

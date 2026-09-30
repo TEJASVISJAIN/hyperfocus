@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,12 +16,14 @@ const REPORT_TIMEOUT_MS = 5000;
 ensureSpawnHelperIsExecutable();
 
 // Runs `focus` inside an outer pseudo-terminal, standing in for the user's real terminal.
-function startFocus(args = [], { cols = 80, rows = 24, env = {} } = {}) {
+// The intro is marked as seen, so tests reach the quiz straight away; `firstRun` shows it.
+function startFocus(args = [], { cols = 80, rows = 24, env = {}, firstRun = false, home = mkdtempSync(join(tmpdir(), 'focus-home-')) } = {}) {
+  if (!firstRun) writeFileSync(join(home, 'state.json'), JSON.stringify({ introSeenAt: '2026-01-01T00:00:00.000Z' }));
   const terminal = pty.spawn(process.execPath, [focusBin, ...args], {
     cols,
     rows,
     // A throwaway data folder: the user's own config and history must neither affect nor collect test runs.
-    env: { ...process.env, HYPERFOCUS_CLAUDE_BIN: fakeClaude, HYPERFOCUS_HOME: mkdtempSync(join(tmpdir(), 'focus-home-')), ...env },
+    env: { ...process.env, HYPERFOCUS_CLAUDE_BIN: fakeClaude, HYPERFOCUS_HOME: home, ...env },
   });
   const reports = [];
   const waiters = [];
@@ -318,6 +320,22 @@ test('when Claude finishes mid-question, the quiz stays up and Enter goes back',
   focus.terminal.write('\r');
   await pause(300);
   assert.equal((await focus.userScreen()).type, 'normal', 'back on Claude');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
+test('the first time the quiz opens, an intro explains the keys, once', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus([], { home, firstRun: true, env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
+  await focus.waitForScreen(/Welcome to hyperfocus/);
+  focus.terminal.write(' ');
+  await focus.waitForScreen(/Why retry refreshToken\?/);
+  assert.match(JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')).introSeenAt, /^\d{4}-/);
+  focus.terminal.write('\x1b');
+  await pause(300);
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });
