@@ -4,13 +4,13 @@ import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { parseFocusArgs } from '../src/cli-args.js';
 import { loadConfig, setProjectSetting } from '../src/config.js';
 import { INTRO_LINES, INTRO_TITLE } from '../src/focus-view.js';
-import { formatStats, projectLabel, readInsights, readStats } from '../src/history.js';
-import { formatNotes, readNotes } from '../src/notes.js';
+import { formatStats, missedStillInCode, projectLabel, readInsights, readStats } from '../src/history.js';
+import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { claudeArgs, auto, stats, notes, review, intro, quiet, here } = parseFocusArgs(process.argv.slice(2));
+const { claudeArgs, auto, stats, notes, review, intro, quiet, here, md } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -35,7 +35,12 @@ if (stats) {
 }
 if (notes) {
   const cwd = process.cwd();
-  process.stdout.write(formatNotes(readNotes({ cwd }), { project: projectLabel(cwd) }));
+  process.stdout.write(formatNotes(readNotes({ cwd }), { project: projectLabel(cwd), checklist: missedStillInCode({ cwd }) }));
+  process.exit(0);
+}
+if (review && md) {
+  const due = missedStillInCode({ cwd: process.cwd() });
+  process.stdout.write(due.length ? formatChecklist(due) : 'Nothing to review: no missed questions about code that is still here.\n');
   process.exit(0);
 }
 

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { createRunLog, formatNotes, medianRunMs, readNotes } from '../src/notes.js';
+import { createRunLog, formatChecklist, formatNotes, medianRunMs, readNotes } from '../src/notes.js';
 
 const tempPath = () => join(mkdtempSync(join(tmpdir(), 'focus-notes-')), 'runs.jsonl');
 const edit = (path, anchors) => ({ path, diff: '', anchors });
@@ -82,4 +82,15 @@ test('runs are logged with how long they took, and a project knows its typical r
   assert.equal(JSON.parse(readFileSync(path, 'utf8').split('\n')[0]).durationMs, 5000);
   assert.equal(medianRunMs({ cwd: '/repo', path }), 9000);
   assert.equal(medianRunMs({ cwd: '/nowhere', path }), null, 'no history, no guess');
+});
+
+test('missed questions still in the code become a Markdown checklist', () => {
+  const due = [
+    { q: 'Why back off?', options: ['Load', 'Style'], answer: 0, why: '', anchor: { file: 'src/retry.ts', anchors: [] } },
+    { q: 'Planning?', options: ['a', 'b'], answer: 1, why: '' },
+  ];
+  assert.equal(formatChecklist(due), '### Worth a look\n\n- [ ] `src/retry.ts`: Why back off? — Load\n- [ ] Planning? — b\n');
+  assert.equal(formatChecklist([]), '');
+  const notes = formatNotes({ runs: [{ prompt: 'p', summary: '', files: ['a.ts'], ts: '' }], leftOut: 0 }, { project: '~/app', checklist: due.slice(0, 1) });
+  assert.match(notes, /- `a.ts`\n\n### Worth a look\n\n- \[ \] `src\/retry.ts`/);
 });

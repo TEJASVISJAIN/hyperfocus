@@ -73,8 +73,15 @@ export function medianRunMs({ cwd, path = defaultRunsPath() }) {
   return durations.length % 2 ? durations[middle] : (durations[middle - 1] + durations[middle]) / 2;
 }
 
-export function formatNotes({ runs, leftOut }, { project }) {
-  if (runs.length === 0 && leftOut === 0) {
+/** Missed questions whose code is still there, as `- [ ]` items to paste into a pull request. */
+export function formatChecklist(due) {
+  if (due.length === 0) return '';
+  const item = (question) => `- [ ] ${question.anchor ? `\`${question.anchor.file}\`: ` : ''}${question.q} — ${question.options[question.answer]}`;
+  return ['### Worth a look', '', ...due.map(item), ''].join('\n');
+}
+
+export function formatNotes({ runs, leftOut }, { project, checklist = [] }) {
+  if (runs.length === 0 && leftOut === 0 && checklist.length === 0) {
     return 'No changes recorded in this project yet. Run `hyperfocus` here and let Claude change something.\n';
   }
   const lines = [`## Session notes · ${project}`, ''];
@@ -87,6 +94,7 @@ export function formatNotes({ runs, leftOut }, { project }) {
   if (leftOut) {
     lines.push(`_${leftOut} earlier change${leftOut === 1 ? ' is' : 's are'} left out: ${leftOut === 1 ? 'it is' : 'they are'} no longer in the code._`, '');
   }
+  if (checklist.length) lines.push(formatChecklist(checklist));
   return lines.join('\n');
 }
 
