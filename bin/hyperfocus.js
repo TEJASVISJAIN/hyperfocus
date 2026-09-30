@@ -2,7 +2,7 @@
 import { runFocus } from '../src/app.js';
 import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { parseFocusArgs } from '../src/cli-args.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, setProjectSetting } from '../src/config.js';
 import { INTRO_LINES, INTRO_TITLE } from '../src/focus-view.js';
 import { formatStats, projectLabel, readStats } from '../src/history.js';
 import { formatNotes, readNotes } from '../src/notes.js';
@@ -10,10 +10,21 @@ import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { claudeArgs, auto, stats, notes, review, intro } = parseFocusArgs(process.argv.slice(2));
+const { claudeArgs, auto, stats, notes, review, intro, quiet, here } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
+if (quiet && here) {
+  try {
+    setProjectSetting(process.cwd(), 'quiet', true);
+  } catch (error) {
+    process.stderr.write(`hyperfocus: ${error.message}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`hyperfocus will stay quiet in ${projectLabel(process.cwd())}: no automatic quizzes (Ctrl-] still opens one).\n`);
+  process.exit(0);
+}
+if (quiet) config.quiet = true;
 if (intro) {
   process.stdout.write([INTRO_TITLE, '', ...INTRO_LINES, ''].join('\n'));
   process.exit(0);

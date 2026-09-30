@@ -99,6 +99,13 @@ export function createAutoSwitch({
       timer = null;
     },
 
+    // "Not this session": the quiz only opens by hand from now on.
+    goQuiet() {
+      auto = false;
+      clearTimeout(timer);
+      timer = null;
+    },
+
     manualToggle(toView) {
       if (toView !== 'claude') return;
       userChoseClaude = true;

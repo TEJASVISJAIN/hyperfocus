@@ -1,5 +1,5 @@
 // hyperfocus accepts every `claude` argument; these few are its own and are removed before claude sees them.
-const OWN_FLAGS = new Set(['--no-auto', '--stats', '--notes', '--review', '--intro']);
+const OWN_FLAGS = new Set(['--no-auto', '--stats', '--notes', '--review', '--intro', '--quiet', '--here']);
 
 export function parseFocusArgs(argv) {
   return {
@@ -9,5 +9,7 @@ export function parseFocusArgs(argv) {
     notes: argv.includes('--notes'),
     review: argv.includes('--review'),
     intro: argv.includes('--intro'),
+    quiet: argv.includes('--quiet'),
+    here: argv.includes('--here'),
   };
 }

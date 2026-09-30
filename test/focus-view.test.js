@@ -198,3 +198,23 @@ test('the intro card comes before the first question and any key dismisses it', 
   assert.deepEqual(answers, [], 'the key that dismisses the intro answers nothing');
   assert.match(screenText(render()), /Why retry refreshToken\?/);
 });
+
+test('z twice asks for no more quizzes this session; anything else in between cancels', () => {
+  let quiet = 0;
+  const view = createFocusView({ onAnswer: () => {}, onQuiet: () => quiet++, onExit: () => {} });
+  assert.match(screenText(view.render({ cols: 100, rows: 30 })), /z\s+quiet for this session/);
+  view.handleKey('z');
+  assert.match(screenText(view.render({ cols: 100, rows: 30 })), /z\s+again: no more automatic quizzes/);
+  view.handleKey('x');
+  view.handleKey('z');
+  assert.equal(quiet, 0, 'a single stray z does nothing');
+  view.handleKey('x');
+  view.addQuestions([retryQuestion]);
+  view.handleKey('z');
+  view.handleKey('z');
+  assert.equal(quiet, 1);
+  view.handleKey('z');
+  view.handleKey('1');
+  assert.equal(quiet, 1);
+  assert.match(screenText(view.render({ cols: 120, rows: 30 })), /▸ 1/, 'the key that cancels is not an answer');
+});

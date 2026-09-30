@@ -51,6 +51,7 @@ export const INTRO_LINES = [
  * - `onFollowUp({ question, chosen, ask, thread })` when the user asks their own follow-up;
  *   answer with `setFollowUpAnswer` or `setFollowUpFailed`
  * - `onBack()` / `onKeepGoing()` for the choice offered by `showFinished`
+ * - `onQuiet()` when the user presses `z`: no more automatic quizzes this session
  * - `onExit()` when the user asks to go back to Claude: Esc anywhere, or Enter while there is no
  *   question yet
  *
@@ -65,6 +66,7 @@ export function createFocusView({
   onBack = undefined,
   onKeepGoing = undefined,
   onExit = undefined,
+  onQuiet = undefined,
   title = 'hyperfocus',
   backHint = 'Esc back to Claude',
   idleText = 'Thinking of a question about this change…',
@@ -88,6 +90,7 @@ export function createFocusView({
   let selectedFor = null;
   let recap = null; // { card, onDismiss } while the "while you were away" card is up
   let intro = null; // { onDismiss } while the first-run intro is up
+  let confirmingQuiet = false; // `z` pressed once: a second `z` goes quiet, anything else cancels
   let finished = null; // { reason, changedFiles, score } while offering "back to Claude or keep going"
   let pendingPredictions = []; // { question, chosen } waiting for Claude's next edit
   let result = null; // { text, good, at }: how the latest prediction turned out
@@ -288,6 +291,13 @@ export function createFocusView({
       if (followUp.draft !== null) return handleDraftKey(key);
       if (key === 'l' && liveToggle) return void (liveShown = !liveShown);
       if (key === ESC && onExit) return onExit();
+      // Two presses, so a stray "z" typed into the wrong screen doesn't silence the session.
+      if (confirmingQuiet) {
+        confirmingQuiet = false;
+        if (key === 'z') return onQuiet();
+        return;
+      }
+      if (key === 'z' && onQuiet && !feedback) return void (confirmingQuiet = true);
 
       const question = current();
       // Nothing to answer yet, and maybe nothing left to wait for: let the user leave simply.
@@ -406,10 +416,18 @@ export function createFocusView({
   function currentHints() {
     const live = liveToggle ? [['l', liveShown ? 'hide live view' : 'live view']] : [];
     const back = onExit ? [['esc', 'back to Claude']] : [];
+    const quiet = onQuiet ? [['z', 'quiet']] : [];
     const question = current();
-    if (!question) return [...(onExit ? [['enter or esc', 'back to Claude']] : []), ...(liveToggle && !liveShown ? [['l', 'see what Claude is doing']] : live)];
+    if (confirmingQuiet) return [['z', 'again: no more automatic quizzes this session'], ['any other key', 'cancel']];
+    if (!question) {
+      return [
+        ...(onExit ? [['enter or esc', 'back to Claude']] : []),
+        ...(liveToggle && !liveShown ? [['l', 'see what Claude is doing']] : live),
+        ...(onQuiet ? [['z', 'quiet for this session']] : []),
+      ];
+    }
     if (followUp.draft !== null) return [['enter', 'ask'], ['esc', 'cancel']];
-    if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ...live, ...back];
+    if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ...live, ...quiet, ...back];
     if (followUp.pendingAsk !== null) return [['any key', 'next question'], ...back];
     return [['f', 'ask a follow-up'], ['any key', 'next question'], ...live, ...back];
   }

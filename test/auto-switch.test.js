@@ -226,3 +226,17 @@ test('a new prompt starts counting edits and plan steps again', () => {
   mock.timers.tick(20_000);
   assert.deepEqual(calls, []);
 });
+
+test('going quiet stops automatic switching for good, but the agent finishing still hands back', () => {
+  const { policy, calls, setView } = setup();
+  policy.agentEvent(busy);
+  policy.goQuiet();
+  mock.timers.tick(60_000);
+  policy.agentEvent(done);
+  policy.agentEvent(busy);
+  mock.timers.tick(60_000);
+  assert.deepEqual(calls, []);
+  setView('focus'); // Ctrl-] still opens it by hand
+  policy.agentEvent(done);
+  assert.deepEqual(calls, ['return: done']);
+});

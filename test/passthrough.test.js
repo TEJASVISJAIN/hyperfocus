@@ -339,3 +339,21 @@ test('the first time the quiz opens, an intro explains the keys, once', async ()
   focus.terminal.write('exit 0\r');
   await focus.exited;
 });
+
+test('z in the quiz goes back to Claude and keeps the quiz away for the rest of the session', async () => {
+  const focus = startFocus([], { env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
+  await focus.waitForScreen(/Why retry refreshToken\?/);
+  focus.terminal.write('zz');
+  await pause(300);
+  assert.equal((await focus.userScreen()).type, 'normal', 'back on Claude');
+  focus.terminal.write('hook 0 Stop\r');
+  focus.terminal.write('hook 100 UserPromptSubmit\r');
+  focus.terminal.write('hook 150 PostToolUse\r');
+  await pause(2800); // past the typing grace and the delay
+  assert.equal((await focus.userScreen()).type, 'normal', 'still on Claude after the next prompt');
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});

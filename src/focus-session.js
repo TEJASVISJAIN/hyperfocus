@@ -15,6 +15,7 @@ export function createFocusSession({
   onAnswer = undefined,
   onBack = undefined,
   onExit = undefined,
+  onQuiet = undefined,
   config = DEFAULT_CONFIG,
   projectAccuracy = { answered: 0, correct: 0 },
 }) {
@@ -50,6 +51,7 @@ export function createFocusSession({
     },
     onBack: () => onBack?.(),
     onExit: () => onExit?.(),
+    onQuiet: onQuiet && (() => onQuiet()),
   });
 
   function askForMoreIfNeeded() {

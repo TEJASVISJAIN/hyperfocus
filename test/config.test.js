@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { DEFAULT_CONFIG, loadConfig } from '../src/config.js';
+import { DEFAULT_CONFIG, loadConfig, setProjectSetting } from '../src/config.js';
 
 function configFile(contents) {
   const path = join(mkdtempSync(join(tmpdir(), 'focus-config-')), 'config.json');
@@ -24,6 +24,7 @@ test('without a config file, the defaults apply', () => {
     mouse: true,
     live: false,
     switchOn: 'edit',
+    quiet: false,
   });
 });
 
@@ -92,4 +93,26 @@ test('switchOn is "edit" by default and accepts "busy"', () => {
   const { config, problems } = loadConfig({ path, env: {} });
   assert.equal(config.switchOn, 'edit');
   assert.match(problems[0], /"switchOn" must be "edit" or "busy"/);
+});
+
+test('a project can override settings, and bad project settings are reported', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'focus-config-'));
+  const path = join(dir, 'config.json');
+  writeFileSync(path, JSON.stringify({ delayMs: 5000, projects: { '/repo': { quiet: true, delayMs: 'soon' }, '/other': { quiet: false } } }));
+  const { config, problems } = loadConfig({ path, env: {}, cwd: '/repo' });
+  assert.equal(config.quiet, true);
+  assert.equal(config.delayMs, 5000, 'the bad project value falls back to the global one');
+  assert.match(problems.join('\n'), /\/repo.*"delayMs"/);
+  assert.equal(loadConfig({ path, env: {}, cwd: '/elsewhere' }).config.quiet, false);
+});
+
+test('setting a project option keeps the rest of the file', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'focus-config-'));
+  const path = join(dir, 'config.json');
+  writeFileSync(path, JSON.stringify({ model: 'sonnet', projects: { '/other': { quiet: false } } }));
+  setProjectSetting('/repo', 'quiet', true, { path });
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { model: 'sonnet', projects: { '/other': { quiet: false }, '/repo': { quiet: true } } });
+  const fresh = join(dir, 'nested', 'config.json');
+  setProjectSetting('/repo', 'quiet', true, { path: fresh });
+  assert.deepEqual(JSON.parse(readFileSync(fresh, 'utf8')), { projects: { '/repo': { quiet: true } } });
 });

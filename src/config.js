@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { dataDir } from './data-dir.js';
 
 export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
@@ -7,7 +7,7 @@ export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
 /**
  * @typedef {{
  *   delayMs: number, model: string, questionsPerBatch: number, kinds: string[],
- *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy'
+ *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy', quiet: boolean
  * }} Config
  */
 
@@ -20,6 +20,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   notifications: true, // macOS notification when Claude needs you (the bell always rings)
   mouse: true, // click options in the focus view
   switchOn: 'edit', // 'edit': wait for something to quiz on (an edit or a plan); 'busy': switch after delayMs, like 0.2.0
+  quiet: false, // never switch to the quiz by itself (Ctrl-] still opens it)
   live: false, // start with the live panel open (feed of agent steps + peek at Claude); `l` toggles it
 });
 
@@ -33,7 +34,9 @@ const RULES = {
   mouse: [isBoolean, 'must be true or false'],
   live: [isBoolean, 'must be true or false'],
   switchOn: [(value) => value === 'edit' || value === 'busy', 'must be "edit" or "busy"'],
+  quiet: [isBoolean, 'must be true or false'],
 };
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export const defaultConfigPath = () => join(dataDir(), 'config.json');
 
@@ -41,7 +44,7 @@ export const defaultConfigPath = () => join(dataDir(), 'config.json');
  * Reads ~/.hyperfocus/config.json. A bad setting never stops hyperfocus: it is reported in
  * `problems` and the default is used instead.
  */
-export function loadConfig({ path = undefined, env = process.env } = {}) {
+export function loadConfig({ path = undefined, env = process.env, cwd = process.cwd() } = {}) {
   const configPath = path ?? (env.HYPERFOCUS_CONFIG || defaultConfigPath());
   const problems = [];
   /** @type {Config} */
@@ -63,12 +66,12 @@ export function loadConfig({ path = undefined, env = process.env } = {}) {
     if (settings !== undefined && (settings === null || typeof settings !== 'object' || Array.isArray(settings))) {
       problems.push(`${configPath} must hold a JSON object of settings, so it was ignored`);
     } else if (settings) {
-      for (const [key, value] of Object.entries(settings)) {
-        const rule = RULES[key];
-        if (!rule) problems.push(`unknown setting "${key}"`);
-        else if (!rule[0](value)) problems.push(`"${key}" ${rule[1]}`);
-        else config[key] = value;
-      }
+      const { projects = {}, ...global } = settings;
+      apply(config, global, problems, '');
+      if (!isObject(projects)) problems.push('"projects" must map project folders to their settings');
+      // This project's own settings win over the global ones.
+      else if (isObject(projects[cwd])) apply(config, projects[cwd], problems, `project ${cwd}: `);
+      else if (projects[cwd] !== undefined) problems.push(`project ${cwd}: settings must be a JSON object`);
     }
   }
 
@@ -82,4 +85,28 @@ export function loadConfig({ path = undefined, env = process.env } = {}) {
   if (env.HYPERFOCUS_DELAY_MS && Number.isFinite(delayFromEnv) && delayFromEnv >= 0) config.delayMs = delayFromEnv;
 
   return { config, problems };
+}
+
+function apply(config, settings, problems, where) {
+  for (const [key, value] of Object.entries(settings)) {
+    const rule = RULES[key];
+    if (!rule) problems.push(`${where}unknown setting "${key}"`);
+    else if (!rule[0](value)) problems.push(`${where}"${key}" ${rule[1]}`);
+    else config[key] = value;
+  }
+}
+
+/** Sets one setting for one project in the config file, keeping everything else in it. */
+export function setProjectSetting(cwd, key, value, { path = defaultConfigPath() } = {}) {
+  let settings = {};
+  try {
+    settings = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw new Error(`${path} could not be read as JSON, so it was left alone`);
+  }
+  if (!isObject(settings)) throw new Error(`${path} must hold a JSON object of settings, so it was left alone`);
+  const projects = isObject(settings.projects) ? settings.projects : {};
+  const next = { ...settings, projects: { ...projects, [cwd]: { ...(isObject(projects[cwd]) ? projects[cwd] : {}), [key]: value } } };
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(next, null, 2) + '\n');
 }

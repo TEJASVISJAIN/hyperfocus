@@ -56,6 +56,10 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
       showRecapOrClaude('done');
     },
     onExit: () => leaveFocus(),
+    onQuiet: () => {
+      policy.goQuiet();
+      leaveFocus();
+    },
   });
 
   // The user chose Claude: like Ctrl-], the focus view stays away until their next prompt.
@@ -147,7 +151,7 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
   const policy = createAutoSwitch({
     delayMs: config.delayMs,
     typingGraceMs: TYPING_GRACE_MS,
-    auto,
+    auto: auto && !config.quiet,
     switchOn: config.switchOn,
     shortRuns: isShortRunProject(cwd, config.delayMs),
     currentView: () => screen.view,
