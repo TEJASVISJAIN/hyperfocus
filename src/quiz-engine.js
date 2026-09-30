@@ -24,6 +24,38 @@ const modelArgs = (systemPrompt, model) => [
 ];
 
 /**
+ * One tiny call made exactly the way questions are written, for `hyperfocus --doctor`.
+ * @returns {Promise<{ ok: boolean, detail: string }>}
+ */
+export function probeQuestionWriter({ claudePath, model = DEFAULT_CONFIG.model, env = process.env, timeoutMs = 60_000 }) {
+  return new Promise((resolve) => {
+    /** @type {NodeJS.ProcessEnv} */
+    const childEnv = { ...env, HYPERFOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
+    delete childEnv.HYPERFOCUS_SOCK;
+    const startedAt = Date.now();
+    const child = spawn(claudePath, modelArgs('Reply with the single word: ok', model), { env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
+    child.on('error', (error) => resolve({ ok: false, detail: error.message }));
+    child.on('close', () => {
+      clearTimeout(timer);
+      const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+      try {
+        const { result, is_error: isError } = JSON.parse(stdout);
+        resolve(isError ? { ok: false, detail: String(result).slice(0, 160) } : { ok: true, detail: `${model} answered in ${seconds}s` });
+      } catch {
+        resolve({ ok: false, detail: (stderr || stdout || 'no reply').trim().split('\n')[0].slice(0, 160) });
+      }
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end('ok?');
+  });
+}
+
+/**
  * Turns the current run into question batches by asking a small model, and decides when it
  * is worth asking again. Emits 'batch' with { summary, questions }.
  *
