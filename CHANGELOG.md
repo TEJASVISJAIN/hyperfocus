@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - **Save a question:** press `w` after answering to keep the question, your answer, whether you were
   right, the explanation, the code it was about and any follow-up you asked. They pile up in a Markdown
