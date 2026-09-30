@@ -58,9 +58,9 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {}, firstRun = fals
     });
 
   // Resolves once everything the user's terminal has received so far matches `pattern`.
-  const waitForScreen = (pattern) =>
+  const waitForScreen = (pattern, timeoutMs = REPORT_TIMEOUT_MS) =>
     new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${pattern}`)), REPORT_TIMEOUT_MS);
+      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${pattern}`)), timeoutMs);
       const check = () => {
         if (!pattern.test(transcript)) return;
         clearTimeout(timer);
@@ -356,4 +356,25 @@ test('z in the quiz goes back to Claude and keeps the quiz away for the rest of 
   assert.equal((await focus.userScreen()).type, 'normal', 'still on Claude after the next prompt');
   focus.terminal.write('exit 0\r');
   await focus.exited;
+});
+
+test('--demo replays a scripted change through the real quiz, without claude, and keeps nothing', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus(['--demo'], { home, cols: 100, rows: 32, env: { HYPERFOCUS_DEMO_SPEED: '5', HYPERFOCUS_CLAUDE_BIN: '/nonexistent/claude' } });
+  await focus.waitForScreen(/hyperfocus demo agent/);
+  focus.terminal.write('\r');
+  await focus.waitForScreen(/Welcome to hyperfocus/, 10_000);
+  focus.terminal.write(' ');
+  await focus.waitForScreen(/withRetry rethrow|backoff miss|edit next/, 10_000);
+  await pause(300);
+  focus.terminal.write('1');
+  await focus.waitForScreen(/Claude finished/, 15_000);
+  focus.terminal.write('\r'); // back to the agent, through the recap: keys in the quiz never reach it
+  await pause(500);
+  focus.terminal.write('\r');
+  await pause(500);
+  assert.equal((await focus.userScreen()).type, 'normal');
+  focus.terminal.write('\x03');
+  await focus.exited;
+  assert.deepEqual(JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')), { introSeenAt: '2026-01-01T00:00:00.000Z' }, "the user's own data folder is untouched");
 });

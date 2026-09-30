@@ -346,7 +346,8 @@ export function createFocusView({
       const header = [statusLine(cols, now), ...planLine(cols - 2), ...resultLine(cols - 2, now), ''];
 
       if (intro) {
-        const body = INTRO_LINES.flatMap((line) => (line ? wrap(line, inner) : ['']));
+        // Key lines keep their spacing, which lines the keys up, whenever they fit.
+        const body = INTRO_LINES.flatMap((line) => (!line ? [''] : widthOf(line) <= inner ? [line] : wrap(line, inner)));
         const screen = [...header, ...card(box, BOLD + INTRO_TITLE + RESET, '', body), ...hintRow([['any key', 'start']], cols, margin)];
         return finish(screen.slice(0, rows));
       }
