@@ -1,11 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>hyperfocus</title>
-<meta name="description" content="hyperfocus runs Claude Code and, while the agent works, quizzes you on the change it is making, so you stay in the terminal instead of reaching for your phone.">
+<meta name="description" content="hyperfocus runs your coding agent (Claude Code, Codex or Gemini) and, while it works, quizzes you on the change it is making, so you stay in the terminal instead of reaching for your phone.">
 <meta property="og:title" content="hyperfocus">
+<meta property="og:image" content="https://tejasvisjain.github.io/hyperfocus-web/hyperfocus-demo-poster.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Ccircle cx=%2710%27 cy=%2710%27 r=%278.5%27 fill=%27none%27 stroke=%27%230a7c8c%27 stroke-width=%271.5%27/%3E%3Cpath d=%27M10 1.5a8.5 8.5 0 0 1 0 17z%27 fill=%27%230a7c8c%27/%3E%3C/svg%3E">
 <meta property="og:description" content="Stay in the terminal while Claude works. A quiz about the change Claude is making, right where you are.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -248,6 +251,78 @@ footer { border-top: 1px solid var(--rule); padding-block: 36px 48px; color: var
 footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
 footer .grow { margin-right: auto; }
 
+/* ── Rotating agent name in the hero ── */
+.agent-word { display: inline-block; color: var(--focus); font-stretch: 70%; transition: filter .45s ease, opacity .45s ease; }
+.agent-word.out { filter: blur(10px); opacity: 0; }
+
+/* ── Version pill and "new" badges ── */
+.pill { display: inline-flex; align-items: center; gap: 8px; font: 600 0.78rem var(--mono); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-soft); }
+.pill .live { width: 7px; height: 7px; border-radius: 50%; background: var(--right); box-shadow: 0 0 0 0 var(--right); animation: pulse 2.4s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--right) 60%, transparent); } 80%, 100% { box-shadow: 0 0 0 8px transparent; } }
+.badge { font: 600 0.7rem var(--mono); letter-spacing: .02em; color: var(--focus); border: 1px solid color-mix(in srgb, var(--focus) 50%, transparent); padding: 2px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; }
+.badge.soon { color: var(--ink-soft); border-color: var(--rule); }
+h3 .badge { margin-left: 8px; font-stretch: 100%; }
+
+/* ── Scroll reveal: sections rack into focus ── */
+.reveal { opacity: 0; filter: blur(8px); transform: translateY(18px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), filter .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+.reveal.in { opacity: 1; filter: none; transform: none; }
+.no-js .reveal { opacity: 1; filter: none; transform: none; }
+
+/* ── When it switches: a run as a timeline ── */
+.runline { margin-top: 44px; border: 1px solid var(--rule); border-radius: 16px; padding: 28px clamp(16px, 3vw, 32px) 22px; background: var(--ground); }
+.track { position: relative; height: 56px; margin-top: 8px; }
+.track .rail { position: absolute; left: 0; right: 0; top: 26px; height: 4px; border-radius: 4px; background: var(--ground-2); }
+.track .fill { position: absolute; left: 0; top: 26px; height: 4px; border-radius: 4px; width: 0; background: linear-gradient(90deg, var(--rule), var(--focus) 30%, var(--focus) 88%, var(--right)); }
+.track .zone { position: absolute; top: 14px; height: 28px; border-radius: 8px; background: color-mix(in srgb, var(--focus) 14%, transparent); border: 1px dashed color-mix(in srgb, var(--focus) 55%, transparent); opacity: 0; }
+.track .tick { position: absolute; top: 18px; width: 2px; height: 20px; background: var(--ink-soft); border-radius: 2px; opacity: 0; transform: translateX(-1px); }
+.track .tick.edit { background: var(--term-yellow); }
+.track .tick.done { background: var(--right); height: 26px; top: 15px; width: 3px; }
+.runline.play .fill { animation: fill-run 6s linear forwards; }
+.runline.play .zone { animation: fade-in .5s ease forwards; animation-delay: var(--at); }
+.runline.play .tick { animation: fade-in .3s ease forwards; animation-delay: var(--at); }
+@keyframes fill-run { to { width: 100%; } }
+@keyframes fade-in { to { opacity: 1; } }
+.legend { font-family: var(--body); display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px 22px; margin-top: 18px; font-size: var(--step--1); color: var(--ink-soft); }
+.legend b { color: var(--ink); display: block; font-family: var(--mono); font-size: 0.8rem; margin-bottom: 2px; }
+.scale { display: flex; justify-content: space-between; font: 0.72rem var(--mono); color: var(--ink-soft); }
+
+/* ── Stats ── */
+.split { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 40px; align-items: center; }
+@media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+.split-copy { display: grid; gap: 16px; color: var(--ink-soft); max-width: var(--measure); }
+.split-copy strong { color: var(--ink); }
+.stats { background: var(--term-bg); color: var(--term-fg); border-radius: 14px; padding: 20px 22px; font: 0.82rem/1.7 var(--mono); box-shadow: var(--shadow); overflow-x: auto; }
+.stats .row { display: grid; grid-template-columns: 9.5rem 1fr 4.5rem; gap: 12px; align-items: center; min-width: 380px; }
+.stats .meter { height: 8px; border-radius: 8px; background: #1b222b; overflow: hidden; }
+.stats .meter i { display: block; height: 100%; width: 0; border-radius: 8px; background: var(--term-cyan); transition: width 1.4s cubic-bezier(.2,.7,.2,1); }
+.stats .meter i.weak { background: var(--term-red); }
+.stats .meter i.mid { background: var(--term-yellow); }
+.stats .head { color: var(--term-dim); margin: 10px 0 2px; }
+.stats .num { text-align: right; color: var(--term-dim); }
+.stats .streak { margin-top: 12px; color: var(--term-green); }
+
+/* ── Agents ── */
+.agents { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.agent { border: 1px solid var(--rule); border-radius: 16px; padding: 22px; display: grid; gap: 12px; align-content: start; background: var(--ground); transition: border-color .25s ease, transform .25s ease; min-width: 0; }
+.agent:hover { border-color: var(--focus); transform: translateY(-3px); }
+.agent h3 { font-size: var(--step-2); font-weight: 750; font-stretch: 90%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.agent p { color: var(--ink-soft); font-size: var(--step--1); }
+.agent .cmd { background: var(--term-bg); color: var(--term-fg); border-radius: 10px; padding: 11px 14px; font: 0.84rem var(--mono); overflow-x: auto; white-space: nowrap; }
+.agent .cmd span { color: var(--term-cyan); }
+.status { font: 600 0.7rem var(--mono); padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--right) 16%, transparent); color: var(--right); }
+.status.exp { background: color-mix(in srgb, var(--term-yellow) 18%, transparent); color: color-mix(in srgb, var(--term-yellow) 60%, var(--ink)); }
+
+/* ── Before you push ── */
+.duo { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.duo .panel { white-space: pre; }
+.duo figcaption { margin-top: 10px; color: var(--ink-soft); font-size: var(--step--1); }
+figure { margin: 0; min-width: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; filter: none; transform: none; }
+  .runline .fill { width: 100%; } .runline .zone, .runline .tick { opacity: 1; }
+  .stats .meter i { transition: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition: none !important; }
   html { scroll-behavior: auto; }
@@ -265,6 +340,7 @@ footer .grow { margin-right: auto; }
     <div class="nav-links">
       <a href="#demo">Demo</a>
       <a href="#how">How it works</a>
+      <a href="#agents">Agents</a>
       <a href="#features">Features</a>
       <a href="#install">Install</a>
       <a class="npm" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">npm ↗</a>
@@ -275,9 +351,9 @@ footer .grow { margin-right: auto; }
 <header class="hero" id="top">
   <div class="noise" aria-hidden="true" id="noise"></div>
   <div class="wrap">
-    <span class="eyebrow"><span class="spin" id="spin">◑</span> claude is editing src/retry.ts · 0:14</span>
-    <h1>Stay in the terminal while <em>Claude</em> works.</h1>
-    <p class="lede">hyperfocus runs Claude Code for you. When the agent has been busy for a few seconds, your terminal switches to a short quiz about <strong>the change Claude is making right now</strong>. When Claude finishes, you're switched straight back.</p>
+    <span class="eyebrow"><span class="spin" id="spin">◑</span> <span id="eyebrow-agent">claude</span> is editing src/retry.ts · 0:14</span>
+    <h1>Stay in the terminal while <span class="agent-word" id="agent-word">Claude</span> works.</h1>
+    <p class="lede">hyperfocus runs your coding agent for you. Once it starts changing code, your terminal switches to a short quiz about <strong>the change it is making right now</strong>. The moment it finishes, you're switched straight back, with a recap.</p>
     <div class="cta">
       <div class="install">
         <span class="prompt">$</span>
@@ -286,7 +362,7 @@ footer .grow { margin-right: auto; }
       </div>
       <a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">View on npm ↗</a>
     </div>
-    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>. It uses your existing Claude Code login. v0.4.0 · MIT · macOS, Linux, and Windows (experimental)</p>
+    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>, or <code>hyperfocus codex</code>, or <code>hyperfocus gemini</code>. No account, no API key. <span class="pill"><span class="live"></span><span id="npm-version">on npm</span></span> · MIT · macOS, Linux, Windows (experimental)</p>
   </div>
 </header>
 
@@ -305,14 +381,55 @@ footer .grow { margin-right: auto; }
 <section class="block" id="how">
   <div class="wrap">
     <span class="kicker">How it works</span>
-    <h2>Claude keeps working. Your attention stays on the change.</h2>
-    <p class="intro">The minutes you spend waiting on an agent are usually spent somewhere else: a feed, a chat, your phone. hyperfocus uses them to walk you through what Claude is doing, so you understand the change before you review it.</p>
-    <ol class="flow">
+    <h2>Your agent keeps working. Your attention stays on the change.</h2>
+    <p class="intro">The minutes you spend waiting on an agent are usually spent somewhere else: a feed, a chat, your phone. hyperfocus uses them to walk you through what the agent is doing, so you understand the change before you review it.</p>
+    <ol class="reveal flow">
       <li><h3>Run it like claude</h3><p><code>hyperfocus</code> takes every argument <code>claude</code> does and runs the real Claude Code in your terminal. Nothing in your settings changes.</p></li>
-      <li><h3>The agent gets busy</h3><p>After 8 seconds of work, and 2 seconds after you stop typing, the screen switches to the focus view. Quick replies never interrupt you.</p></li>
-      <li><h3>Questions about this change</h3><p>A small Haiku call reads your prompt, the files Claude opened and the diffs it wrote, then asks why it's done this way and what could break.</p></li>
+      <li><h3>The agent starts changing code</h3><p>Once it has been busy for 8 seconds <em>and</em> made its first edit or plan, the screen switches to the focus view. Quick answers and runs that only read code never interrupt you.</p></li>
+      <li><h3>Questions about this change</h3><p>A small, cheap model call reads your prompt, the diffs and the code around them, then asks why it's done this way and what could break.</p></li>
       <li><h3>Straight back when it's done</h3><p>The moment Claude finishes or needs you, you're back, with a bell and a "while you were away" card listing what changed.</p></li>
     </ol>
+  </div>
+</section>
+
+<section class="block" id="timing">
+  <div class="wrap">
+    <span class="kicker">When it switches <span class="badge" data-since="0.3.0"></span></span>
+    <h2>It waits until there is something worth asking about.</h2>
+    <p class="intro">A fixed timer quizzes you about nothing, then yanks you back a second later. hyperfocus watches the run instead: what the agent has done, how big its plan is, and how long runs usually take in this project.</p>
+    <div class="runline" id="runline" role="img" aria-label="A run: the agent reads files, makes a plan, edits src/retry.ts, the quiz opens, more edits land, the agent finishes and you are back.">
+      <div class="scale"><span>prompt</span><span>0:08</span><span>0:20</span><span>done</span></div>
+      <div class="track">
+        <div class="rail"></div>
+        <div class="zone" style="left:30%; width:58%; --at:1.8s"></div>
+        <div class="fill"></div>
+        <div class="tick" style="left:6%; --at:.3s"></div>
+        <div class="tick" style="left:12%; --at:.7s"></div>
+        <div class="tick edit" style="left:30%; --at:1.8s"></div>
+        <div class="tick edit" style="left:52%; --at:3.1s"></div>
+        <div class="tick edit" style="left:74%; --at:4.4s"></div>
+        <div class="tick done" style="left:88%; --at:5.3s"></div>
+      </div>
+      <div class="legend">
+        <div><b>reads and plans</b>Nothing to ask about yet, so it stays on your agent's screen.</div>
+        <div><b style="color:var(--term-yellow)">first edit</b>Busy for 8 seconds and something to ask about: the quiz opens. A plan of 3+ steps halves the wait.</div>
+        <div><b style="color:var(--focus)">quiz</b>New questions arrive as the diff grows. Never while you're typing.</div>
+        <div><b style="color:var(--right)">done</b>Straight back, with a bell and a recap. Runs that are usually short here wait for a second edit.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="agents">
+  <div class="wrap">
+    <span class="kicker">Your agent <span class="badge" data-since="0.5.0"></span></span>
+    <h2>Bring the agent you already use.</h2>
+    <p class="intro">The same quiz, recap, notes and stats around Claude Code, OpenAI Codex or Google Gemini. Your agent's own settings files are never touched, and if Claude Code is installed, it writes the questions for all three.</p>
+    <div class="agents">
+      <article class="agent reveal"><h3>Claude Code <span class="status">stable</span></h3><p>Hooks are attached per launch with <code>--settings</code>. Nothing on disk changes.</p><div class="cmd"><span>$</span> hyperfocus</div></article>
+      <article class="agent reveal"><h3>Codex <span class="status exp">experimental</span></h3><p>Runs with a mirrored <code>CODEX_HOME</code>: your auth and sessions stay put, and you trust the hook once.</p><div class="cmd"><span>$</span> hyperfocus codex</div></article>
+      <article class="agent reveal"><h3>Gemini <span class="status exp">experimental</span></h3><p>Gets hyperfocus's hooks through a copy of its system settings. Your <code>~/.gemini</code> is left alone.</p><div class="cmd"><span>$</span> hyperfocus gemini</div></article>
+    </div>
   </div>
 </section>
 
@@ -321,7 +438,7 @@ footer .grow { margin-right: auto; }
     <span class="kicker">Questions</span>
     <h2>Four kinds of question, all about your diff.</h2>
     <p class="intro">Code shown in a question is checked against the diff, so it's always code Claude really wrote. Options are shuffled, and questions get harder when you keep getting them right.</p>
-    <div class="kinds">
+    <div class="reveal kinds">
       <article class="kind">
         <span class="tag">why</span>
         <h3>Why this way</h3>
@@ -364,20 +481,71 @@ many clients, what can go wrong?</span>
         <p>Say you had Claude build a circuit breaker, then changed course and had it use retries instead. Questions about the breaker are now about code that no longer exists.</p>
         <p>Every question remembers the distinctive lines its change added. <strong>If those lines are gone from the file, the change was reverted or rewritten</strong>, and hyperfocus leaves it out of your review, your merge checklist and your session notes.</p>
       </div>
-      <div class="lanes" aria-label="Example: a discarded change is left out, the kept one stays">
+      <div class="reveal lanes" aria-label="Example: a discarded change is left out, the kept one stays">
         <div class="lane"><span class="who">prompt 1</span><div class="bar gone"><span class="mark">✘</span><span>class CircuitBreaker { … }</span></div></div>
         <div class="lane"><span class="who">prompt 2</span><div class="bar kept"><span class="mark">✔</span><span>return withRetry(fetchToken, 3);</span></div></div>
         <div class="lane"><span class="who">review</span><div class="bar kept"><span class="mark">▸</span><span>Why three attempts? · src/retry.ts</span></div></div>
       </div>
     </div>
 
-    <div class="features">
+    <div class="reveal features">
       <div class="feature"><h3>A live view, when you want it</h3><p>Press <kbd>l</kbd> to see what the agent is reading, editing and running, and the last lines of Claude's own screen. It's hidden by default, so the question has the screen to itself.</p></div>
       <div class="feature"><h3>Ask your own follow-up</h3><p>After any answer, press <kbd>f</kbd> and ask "why not a circuit breaker?". The answer uses the diff, the question and the thread so far.</p></div>
       <div class="feature"><h3>Worth a look before you merge</h3><p>The recap lists the questions you got wrong whose code is still there: the parts of the change you don't fully understand yet.</p></div>
       <div class="feature"><h3>Notes and review</h3><p><code>hyperfocus --notes</code> writes the session up as markdown for a PR description. <code>hyperfocus --review</code> asks again the questions you missed.</p></div>
+      <div class="feature"><h3>Quiet when you need it <span class="badge" data-since="0.3.0"></span></h3><p>Press <kbd>z</kbd> twice for no more quizzes this session, or run <code>hyperfocus --quiet --here</code> to keep one project quiet for good. <kbd>Ctrl-]</kbd> still opens a quiz.</p></div>
+      <div class="feature"><h3>Try it, then check it <span class="badge" data-since="0.3.0"></span></h3><p><code>hyperfocus --demo</code> replays a scripted change through the real quiz, with no agent needed. <code>hyperfocus --doctor</code> checks your whole setup, down to one real question.</p></div>
       <div class="feature"><h3>Your login, your costs</h3><p>No account and no API key. It runs your own <code>claude</code>, so it works with a subscription, an API key, Bedrock or Vertex. A batch of questions costs about $0.003.</p></div>
       <div class="feature"><h3>Secrets stay out</h3><p>Tokens and passwords in diffs and commands are replaced with <code>[redacted]</code> before anything is stored, shown or sent. <code>.env</code> files and keys are never read.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="stats">
+  <div class="wrap">
+    <div class="split">
+      <div class="split-copy">
+        <span class="kicker" style="margin:0">Getting sharper <span class="badge" data-since="0.3.0"></span></span>
+        <h2>See what you keep missing.</h2>
+        <p>Every question is tagged with what it's really about: concurrency, error handling, state, API design. <code>hyperfocus --stats</code> shows your accuracy over the last 30 days, by kind of question and in each project, and <strong>the concepts you miss most</strong>.</p>
+        <p>Press <kbd>b</kbd> on a bad question and it never counts, never comes back, and steers the next ones away from it.</p>
+      </div>
+      <div class="stats reveal" id="stats-panel" aria-label="Example output of hyperfocus --stats">
+        <div class="head">accuracy</div>
+        <div class="row"><span>last 30 days</span><span class="meter"><i data-w="78"></i></span><span class="num">78%</span></div>
+        <div class="row"><span>this project</span><span class="meter"><i data-w="71"></i></span><span class="num">71%</span></div>
+        <div class="row"><span>spot the bug</span><span class="meter"><i class="mid" data-w="58"></i></span><span class="num">58%</span></div>
+        <div class="head">worth studying</div>
+        <div class="row"><span>concurrency</span><span class="meter"><i class="weak" data-w="33"></i></span><span class="num">2 of 6</span></div>
+        <div class="row"><span>edge-cases</span><span class="meter"><i class="mid" data-w="50"></i></span><span class="num">4 of 8</span></div>
+        <div class="streak">streak · 6 days in a row</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="push">
+  <div class="wrap">
+    <span class="kicker">Before you push <span class="badge" data-since="0.3.0"></span></span>
+    <h2>The parts you don't understand yet, right before they ship.</h2>
+    <p class="intro">Questions you got wrong about code that is still there become a checklist: in the recap, in your PR description, and, if you want, in a git hook that never blocks a push.</p>
+    <div class="duo">
+      <figure class="reveal"><div class="panel"><span class="t-cyan">$</span> git push
+<span class="t-yellow">hyperfocus: 2 missed questions, code still here:</span>
+  - retry.ts: What does the backoff miss?
+    <span class="t-green">Jitter</span>
+  - auth.ts: Why retry at the call site?
+    <span class="t-green">Other callers fail fast</span>
+<span class="t-dim">To github.com:you/app.git</span></div><figcaption><code>hyperfocus --install-hook</code> adds it; <code>--uninstall-hook</code> removes exactly that.</figcaption></figure>
+      <figure class="reveal"><div class="panel"><span class="t-b">## add retry with backoff to token refresh</span>
+
+Wrapping refreshToken() in withRetry: 3 attempts.
+- `src/retry.ts`
+- `src/auth.ts`
+
+<span class="t-b">### Worth a look</span>
+
+- [ ] `src/retry.ts`: What does this backoff miss?</div><figcaption><code>hyperfocus --notes</code> writes the session up for a pull request.</figcaption></figure>
     </div>
   </div>
 </section>
@@ -386,12 +554,14 @@ many clients, what can go wrong?</span>
   <div class="wrap">
     <span class="kicker">Keys</span>
     <h2>Everything is one key away.</h2>
-    <div class="keys">
+    <div class="reveal keys">
       <table>
         <tbody>
           <tr><td><kbd>Ctrl-]</kbd></td><td>anywhere</td><td>Switch between Claude and the focus view</td></tr>
           <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>question</td><td>Choose an option and answer. <kbd>1</kbd>–<kbd>4</kbd> or a click works too.</td></tr>
           <tr><td><kbd>s</kbd></td><td>question</td><td>Skip the question</td></tr>
+          <tr><td><kbd>b</kbd></td><td>question</td><td>A bad question: skip it unscored, and steer future ones away from it</td></tr>
+          <tr><td><kbd>z</kbd> <kbd>z</kbd></td><td>focus view</td><td>Quiet for the rest of this session</td></tr>
           <tr><td><kbd>f</kbd></td><td>after an answer</td><td>Ask your own follow-up</td></tr>
           <tr><td><kbd>l</kbd></td><td>focus view</td><td>Show or hide the live view</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>focus view</td><td>Back to Claude. The question waits for next time.</td></tr>
@@ -406,7 +576,7 @@ many clients, what can go wrong?</span>
   <div class="wrap">
     <span class="kicker">Install</span>
     <h2>One command. No sign-up.</h2>
-    <div class="install-grid">
+    <div class="reveal install-grid">
       <div class="panel" aria-label="Install and use"><span class="t-dim"># install</span>
 <span class="t-cyan">$</span> npm install -g @ddalus/hyperfocus
 
@@ -416,16 +586,18 @@ many clients, what can go wrong?</span>
 <span class="t-dim"># use it exactly like claude</span>
 <span class="t-cyan">$</span> hyperfocus
 <span class="t-cyan">$</span> hyperfocus --continue
+<span class="t-cyan">$</span> hyperfocus codex        <span class="t-dim"># or gemini</span>
 
 <span class="t-dim"># after a session</span>
 <span class="t-cyan">$</span> hyperfocus --notes
 <span class="t-cyan">$</span> hyperfocus --review
 <span class="t-cyan">$</span> hyperfocus --stats
+<span class="t-cyan">$</span> hyperfocus --install-hook
 
 <span class="t-dim"># something off?</span>
 <span class="t-cyan">$</span> hyperfocus --doctor</div>
       <div class="need">
-        <p><strong>You need Node.js 22 or newer and Claude Code, installed and logged in.</strong> If you already use <code>claude</code>, you're set.</p>
+        <p><strong>You need Node.js 22 or newer and a coding agent, installed and logged in:</strong> Claude Code, Codex or Gemini CLI. If you already use one, you're set.</p>
         <p><strong>Linux:</strong> installing compiles one native dependency, so you need <code>python3</code>, <code>make</code> and a C++ compiler (<code>sudo apt install build-essential python3</code>). macOS needs nothing extra.</p>
         <p><strong>Windows</strong> is experimental: Windows Terminal with PowerShell, keyboard only for now.</p>
         <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, which kinds of question, notifications, the mouse, the live view, and quiet mode per project. Every key is optional.</p>
@@ -445,6 +617,7 @@ many clients, what can go wrong?</span>
 
 <script>
 (() => {
+  document.documentElement.classList.remove('no-js');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ── Hero noise: the things you'd otherwise be looking at ── */
@@ -504,6 +677,65 @@ many clients, what can go wrong?</span>
     video.removeAttribute('autoplay');
     video.pause();
   }
+
+  /* ── The agent in the headline racks between the three it can wrap ── */
+  const word = document.getElementById('agent-word');
+  const eyebrowAgent = document.getElementById('eyebrow-agent');
+  const agents = ['Claude', 'Codex', 'Gemini'];
+  if (!reduced) {
+    let agentIndex = 0;
+    setInterval(() => {
+      word.classList.add('out');
+      setTimeout(() => {
+        agentIndex = (agentIndex + 1) % agents.length;
+        word.textContent = agents[agentIndex];
+        eyebrowAgent.textContent = agents[agentIndex].toLowerCase();
+        word.classList.remove('out');
+      }, 450);
+    }, 3200);
+  }
+
+  /* ── Sections rack into focus as they scroll in ── */
+  const reveal = (element) => {
+    element.classList.add('in');
+    element.querySelectorAll('.meter i').forEach((bar) => (bar.style.width = bar.dataset.w + '%'));
+    if (element.id === 'runline') element.classList.add('play');
+  };
+  const watched = [...document.querySelectorAll('.reveal, #runline')];
+  if (reduced || !('IntersectionObserver' in window)) watched.forEach(reveal);
+  else {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        reveal(entry.target);
+        observer.unobserve(entry.target);
+      }
+    }, { threshold: 0.2 });
+    watched.forEach((element) => observer.observe(element));
+  }
+
+  /* ── The published version, live from npm; features not out yet say so ── */
+  const newer = (a, b) => {
+    const [x, y] = [a, b].map((v) => v.split('.').map(Number));
+    for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+    return false;
+  };
+  const badges = (version) =>
+    document.querySelectorAll('[data-since]').forEach((badge) => {
+      const since = badge.dataset.since;
+      const out = version && !newer(since, version);
+      badge.textContent = out ? `new in ${since}` : 'next release';
+      badge.classList.toggle('soon', !out);
+    });
+  badges(null);
+  fetch('https://registry.npmjs.org/@ddalus/hyperfocus/latest')
+    .then((response) => (response.ok ? response.json() : Promise.reject()))
+    .then(({ version }) => {
+      document.getElementById('npm-version').textContent = `v${version} on npm`;
+      badges(version);
+    })
+    .catch(() => {});
+})();
 </script>
 </body>
 </html>
