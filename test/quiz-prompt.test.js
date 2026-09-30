@@ -120,3 +120,14 @@ test('questions the developer rated bad are passed on as ones to avoid', () => {
   const prompt = buildQuizPrompt(run, [], { kinds: ['why'], count: 3, avoid: ['What does const mean?'] });
   assert.match(prompt, /rated these questions as bad[\s\S]*- What does const mean\?/);
 });
+
+test('questions carry one or two concept tags from the fixed list; unknown tags are dropped', () => {
+  assert.match(buildQuizPrompt(run, [], { kinds: ['why'], count: 3 }), /"tags": 1-2 of error-handling, concurrency, state/);
+  const reply2 = reply([
+    { ...why, tags: ['concurrency', 'made-up', 'error-handling', 'state'] },
+    { ...why, q: 'Untagged?', tags: 'concurrency' },
+  ]);
+  const [tagged, untagged] = parseQuizReply(reply2, { run, kinds: ['why'] }).questions;
+  assert.deepEqual(tagged.tags, ['concurrency', 'error-handling']);
+  assert.equal(untagged.tags, undefined);
+});

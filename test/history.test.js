@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createHistory, missedStillInCode, readStats, recentAccuracy, recentBadQuestions } from '../src/history.js';
+import { createHistory, missedStillInCode, readStats, readInsights, recentAccuracy, recentBadQuestions, formatStats } from '../src/history.js';
 
 const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
 const question = { q: 'Why retry?', options: ['a', 'b', 'c'], answer: 1, why: 'w' };
@@ -170,4 +170,40 @@ test('a question rated bad never comes back for review, is left out of stats, an
   const [repo] = readStats(path);
   assert.equal(repo.answered, 1, 'the answer to the bad question is not counted');
   assert.deepEqual(recentBadQuestions({ cwd: '/repo', path }), ['Bad 2?', 'Bad 3?', 'Bad 4?', 'Bad 5?', 'Bad 6?']);
+});
+
+test('insights: accuracy all time and lately, per kind, weakest concepts, this project, and the day streak', () => {
+  const path = join(tempDir(), 'history.jsonl');
+  const day = (n) => new Date(Date.UTC(2026, 8, n)).toISOString();
+  const entry = (ts, { cwd = '/repo', sessionId = 's1', kind = 'why', tags = [], correct = true, skipped = false } = {}) =>
+    JSON.stringify({ ts, cwd, sessionId, kind, tags, correct, skipped, question: `q${Math.random()}` });
+  writeFileSync(path, [
+    entry(new Date(Date.UTC(2026, 7, 1)).toISOString(), { sessionId: 'old', correct: false, tags: ['concurrency'] }),
+    entry(new Date(Date.UTC(2026, 7, 1)).toISOString(), { sessionId: 'old', correct: false, tags: ['concurrency'] }),
+    entry(day(25), { sessionId: 'a', correct: true, tags: ['concurrency'] }),
+    entry(day(25), { sessionId: 'a', kind: 'bug', correct: false, tags: ['state'] }),
+    entry(day(26), { sessionId: 'b', kind: 'bug', correct: false, tags: ['state'] }),
+    entry(day(26), { sessionId: 'b', kind: 'bug', correct: true, tags: ['state', 'types'] }),
+    entry(day(27), { sessionId: 'c', cwd: '/other', correct: true, tags: ['types'] }),
+    entry(day(27), { sessionId: 'c', cwd: '/other', correct: true, tags: ['types'] }),
+    entry(day(28), { sessionId: 'd', skipped: true, correct: null }),
+  ].join('\n'));
+  const insights = readInsights({ path, cwd: '/repo', now: Date.parse(day(28)) + 12 * 3600_000 });
+  assert.deepEqual(insights.allTime, { answered: 8, correct: 4 });
+  assert.deepEqual(insights.lately, { answered: 6, correct: 4 }, 'the last 30 days');
+  assert.deepEqual(insights.byKind, { why: { answered: 5, correct: 3 }, bug: { answered: 3, correct: 1 } });
+  assert.deepEqual(insights.weakest, [
+    { tag: 'concurrency', answered: 3, correct: 1 },
+    { tag: 'state', answered: 3, correct: 1 },
+  ], 'tags with three or more answers and at least one miss, weakest first, ties by name; types is all right');
+  assert.deepEqual(insights.project, { answered: 6, correct: 2 });
+  assert.equal(insights.streak, 3, 'answers on the 25th, 26th and 27th; the 28th (today) only has a skip');
+  assert.equal(readInsights({ path, cwd: '/repo', now: Date.parse(day(30)) + 12 * 3600_000 }).streak, 0, 'broken by two days without answers');
+
+  const text = formatStats(readStats(path), insights);
+  assert.match(text, /last 30 days\s+4 of 6 right \(67%\)/);
+  assert.match(text, /spot the bug\s+1 of 3 right/);
+  assert.match(text, /state\s+1 of 3 right/);
+  assert.match(text, /this project\s+2 of 6 right/);
+  assert.match(text, /streak\s+3 days/);
 });

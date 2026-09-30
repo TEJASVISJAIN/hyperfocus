@@ -5,7 +5,7 @@ import { changedFiles } from './activity-log.js';
  * @typedef {'why' | 'bug' | 'output' | 'predict'} QuestionKind
  * @typedef {{
  *   kind: QuestionKind, q: string, options: string[], answer: number | null, why: string,
- *   file?: string, code?: string, codeMarks?: string[],
+ *   file?: string, code?: string, codeMarks?: string[], tags?: string[],
  *   anchor?: { file: string, anchors: string[] }
  * }} Question
  * @typedef {{ summary: string, questions: Question[] }} Batch
@@ -27,6 +27,12 @@ const KIND_INSTRUCTIONS = {
     '"predict": at most one, "Which file will the agent edit next?", with 3-4 file paths as options taken from the ' +
     'files read or changed. Set "answer" to null: what the agent does next decides it.',
 };
+
+// A fixed vocabulary, so --stats can group answers the same way over months.
+export const CONCEPT_TAGS = [
+  'error-handling', 'concurrency', 'state', 'data-flow', 'types', 'api-design',
+  'edge-cases', 'testing', 'performance', 'security', 'structure', 'tooling',
+];
 
 export const SYSTEM_PROMPT =
   'You help a developer stay engaged with the change an AI coding agent is making in their codebase ' +
@@ -67,6 +73,7 @@ export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 
       '   Each question: {"kind": string, "q": string, "options": [3-4 strings], "answer": 0-based index of the one',
       '   correct option, "why": one sentence explaining the answer, "file": the path it is mostly about (optional),',
       `   "code": lines copied exactly from the changes (optional${codeRequiredFor(allowedKinds)})}.`,
+      `   Also "tags": 1-2 of ${CONCEPT_TAGS.join(', ')}: what the question is really about.`,
       '   Make the wrong options plausible.',
       ...difficulty(accuracy),
       '',
@@ -129,6 +136,8 @@ function toQuestion(raw, { run, kinds, grounding }) {
   if (typeof raw.file === 'string' && grounding.files.has(raw.file)) question.file = raw.file;
   const excerpt = typeof raw.code === 'string' ? excerptFrom(raw.code, grounding) : null;
   if (excerpt) Object.assign(question, excerpt);
+  const tags = Array.isArray(raw.tags) ? [...new Set(raw.tags.filter((tag) => CONCEPT_TAGS.includes(tag)))].slice(0, 2) : [];
+  if (tags.length) question.tags = tags;
 
   if (kind === 'predict') return run?.finished ? null : question;
   if (!Number.isInteger(raw.answer) || raw.answer < 0 || raw.answer >= raw.options.length || typeof raw.why !== 'string') return null;

@@ -4,7 +4,7 @@ import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { parseFocusArgs } from '../src/cli-args.js';
 import { loadConfig, setProjectSetting } from '../src/config.js';
 import { INTRO_LINES, INTRO_TITLE } from '../src/focus-view.js';
-import { formatStats, projectLabel, readStats } from '../src/history.js';
+import { formatStats, projectLabel, readInsights, readStats } from '../src/history.js';
 import { formatNotes, readNotes } from '../src/notes.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
@@ -30,7 +30,7 @@ if (intro) {
   process.exit(0);
 }
 if (stats) {
-  process.stdout.write(formatStats(readStats()));
+  process.stdout.write(formatStats(readStats(), readInsights()));
   process.exit(0);
 }
 if (notes) {

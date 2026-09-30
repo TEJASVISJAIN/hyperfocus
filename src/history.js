@@ -26,6 +26,7 @@ export function createHistory({ path = defaultHistoryPath() } = {}) {
         why: question.why,
         ...(question.code ? { code: question.code, codeMarks: question.codeMarks } : {}),
         ...(question.anchor ? { anchor: question.anchor } : {}),
+        ...(question.tags?.length ? { tags: question.tags } : {}),
         chosen,
         correct,
         skipped,
@@ -122,7 +123,74 @@ export function readStats(path = defaultHistoryPath()) {
   return [...byProject.values()];
 }
 
-export function formatStats(stats) {
+const DAY_MS = 24 * 3600_000;
+const LATELY_DAYS = 30;
+const MIN_TAG_ANSWERS = 3;
+const WEAKEST_TAGS = 3;
+const KIND_NAMES = { why: 'why', bug: 'spot the bug', output: 'what does it do', predict: 'predict' };
+
+const tally = (entries) => ({ answered: entries.length, correct: entries.filter((entry) => entry.correct === true).length });
+const localDay = (time) => new Date(time).toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+
+/** What --stats says beyond the per-project table: trends, kinds, weak concepts, and the streak. */
+export function readInsights({ path = defaultHistoryPath(), cwd = process.cwd(), now = Date.now() } = {}) {
+  const answers = readEntries(path).filter((entry) => !entry.skipped && typeof entry.correct === 'boolean');
+  const time = (entry) => Date.parse(entry.ts);
+
+  const byKind = {};
+  for (const entry of answers) {
+    const kind = entry.kind in KIND_NAMES ? entry.kind : 'why';
+    byKind[kind] = { answered: (byKind[kind]?.answered ?? 0) + 1, correct: (byKind[kind]?.correct ?? 0) + (entry.correct ? 1 : 0) };
+  }
+
+  const byTag = new Map();
+  for (const entry of answers) {
+    for (const tag of Array.isArray(entry.tags) ? entry.tags : []) {
+      const counts = byTag.get(tag) ?? { tag, answered: 0, correct: 0 };
+      counts.answered++;
+      if (entry.correct) counts.correct++;
+      byTag.set(tag, counts);
+    }
+  }
+  const weakest = [...byTag.values()]
+    .filter((counts) => counts.answered >= MIN_TAG_ANSWERS && counts.correct < counts.answered)
+    .sort((a, b) => a.correct / a.answered - b.correct / b.answered || a.tag.localeCompare(b.tag))
+    .slice(0, WEAKEST_TAGS);
+
+  // Days in a row with at least one answer, ending today or yesterday.
+  const days = new Set(answers.filter((entry) => Number.isFinite(time(entry))).map((entry) => localDay(time(entry))));
+  let streak = 0;
+  let day = days.has(localDay(now)) ? now : now - DAY_MS;
+  while (days.has(localDay(day))) {
+    streak++;
+    day -= DAY_MS;
+  }
+
+  return {
+    allTime: tally(answers),
+    lately: tally(answers.filter((entry) => time(entry) >= now - LATELY_DAYS * DAY_MS)),
+    byKind,
+    weakest,
+    project: tally(answers.filter((entry) => entry.cwd === cwd)),
+    streak,
+  };
+}
+
+const rightOf = ({ answered, correct }) => `${correct} of ${answered} right (${answered ? Math.round((correct / answered) * 100) : 0}%)`;
+
+function formatInsights(insights) {
+  const rows = [
+    ['last 30 days', rightOf(insights.lately)],
+    ['this project', rightOf(insights.project)],
+    ...Object.entries(insights.byKind).map(([kind, counts]) => [KIND_NAMES[kind], rightOf(counts)]),
+  ];
+  const lines = ['', ...rows.filter(([, value]) => !value.startsWith('0 of 0')).map(([label, value]) => `  ${label.padEnd(16)}${value}`)];
+  if (insights.weakest.length) lines.push('', '  worth studying', ...insights.weakest.map((counts) => `    ${counts.tag.padEnd(14)}${rightOf(counts)}`));
+  if (insights.streak) lines.push('', `  ${'streak'.padEnd(16)}${insights.streak} day${insights.streak === 1 ? '' : 's'} in a row`);
+  return [...lines, ''];
+}
+
+export function formatStats(stats, insights = undefined) {
   if (!stats.length) return 'No quiz answers recorded yet. Run `hyperfocus` and answer a few questions while Claude works.\n';
 
   const rows = stats.map((project) => ({ ...project, label: projectLabel(project.cwd) }));
@@ -141,6 +209,7 @@ export function formatStats(stats) {
     `  ${'project'.padEnd(labelWidth)}  ${'answered'.padStart(8)}  ${'correct'.padStart(9)}  ${'skipped'.padStart(7)}`,
     ...rows.map(format),
     format(total),
+    ...(insights ? formatInsights(insights) : []),
     '',
   ].join('\n');
 }
