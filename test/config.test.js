@@ -23,6 +23,7 @@ test('without a config file, the defaults apply', () => {
     notifications: true,
     mouse: true,
     live: false,
+    switchOn: 'edit',
   });
 });
 
@@ -79,4 +80,16 @@ test('an empty kinds list and a file that is not an object are reported', () => 
     assert.deepEqual(config, DEFAULT_CONFIG);
     assert.equal(problems.length, 1, contents);
   }
+});
+
+test('switchOn is "edit" by default and accepts "busy"', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'focus-config-'));
+  const path = join(dir, 'config.json');
+  assert.equal(loadConfig({ path, env: {} }).config.switchOn, 'edit');
+  writeFileSync(path, JSON.stringify({ switchOn: 'busy' }));
+  assert.equal(loadConfig({ path, env: {} }).config.switchOn, 'busy');
+  writeFileSync(path, JSON.stringify({ switchOn: 'soon' }));
+  const { config, problems } = loadConfig({ path, env: {} });
+  assert.equal(config.switchOn, 'edit');
+  assert.match(problems[0], /"switchOn" must be "edit" or "busy"/);
 });

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { createRunLog, formatNotes, readNotes } from '../src/notes.js';
+import { createRunLog, formatNotes, medianRunMs, readNotes } from '../src/notes.js';
 
 const tempPath = () => join(mkdtempSync(join(tmpdir(), 'focus-notes-')), 'runs.jsonl');
 const edit = (path, anchors) => ({ path, diff: '', anchors });
@@ -70,4 +70,16 @@ test('the notes read as markdown, ready for a PR description', () => {
 test('with nothing recorded, the notes say how to get some', () => {
   const text = formatNotes(readNotes({ cwd: '/repo', path: tempPath(), readFile }), { project: '~/repo' });
   assert.match(text, /No changes recorded/);
+});
+
+test('runs are logged with how long they took, and a project knows its typical run length', () => {
+  const path = tempPath();
+  const runs = createRunLog({ path });
+  for (const [startedAt, finishedAt] of [[0, 5000], [0, 12_000], [0, 9000]]) {
+    runs.append({ ...run('p', []), startedAt, finishedAt }, { cwd: '/repo', sessionId: 's', summary: '' });
+  }
+  runs.append({ ...run('p', []), startedAt: 0, finishedAt: 60_000 }, { cwd: '/other', sessionId: 's', summary: '' });
+  assert.equal(JSON.parse(readFileSync(path, 'utf8').split('\n')[0]).durationMs, 5000);
+  assert.equal(medianRunMs({ cwd: '/repo', path }), 9000);
+  assert.equal(medianRunMs({ cwd: '/nowhere', path }), null, 'no history, no guess');
 });

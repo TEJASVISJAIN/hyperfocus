@@ -12,7 +12,7 @@ const MAX_TIMELINE_STEPS = 30;
  * @typedef {{ path: string, diff: string, anchors: string[] }} Edit
  * @typedef {{ kind: 'read' | 'edit' | 'command' | 'subagent', text: string, added?: number, removed?: number }} Step
  * @typedef {{
- *   prompt: string, startedAt: number, finished: boolean,
+ *   prompt: string, startedAt: number, finished: boolean, finishedAt?: number,
  *   reads: string[], edits: Edit[], commands: string[], timeline: Step[]
  * }} Run
  * @typedef {{ id: string, subject: string, activeForm: string, status: string }} Task
@@ -104,6 +104,7 @@ export function createActivityLog({ cwd = process.cwd() } = {}) {
           break;
         case 'done':
           current.finished = true;
+          current.finishedAt = Date.now();
           break;
       }
     },

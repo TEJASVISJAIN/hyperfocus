@@ -25,6 +25,7 @@ export function createRunLog({ path = defaultRunsPath() } = {}) {
         sessionId,
         prompt: run.prompt,
         summary,
+        ...(run.finishedAt ? { durationMs: run.finishedAt - run.startedAt } : {}),
         files: [...files].map(([file, anchors]) => ({ path: file, anchors: [...anchors] })),
       };
       try {
@@ -56,6 +57,20 @@ export function readNotes({ cwd, path = defaultRunsPath(), readFile = undefined 
     else runs.push({ prompt: entry.prompt, summary: entry.summary, files, ts: entry.ts });
   }
   return { runs, leftOut };
+}
+
+const TYPICAL_RUNS = 20;
+
+/** The median length of this project's latest runs, or null with no history to go on. */
+export function medianRunMs({ cwd, path = defaultRunsPath() }) {
+  const durations = readRuns(path)
+    .filter((entry) => entry.cwd === cwd && Number.isFinite(entry.durationMs))
+    .slice(-TYPICAL_RUNS)
+    .map((entry) => entry.durationMs)
+    .sort((a, b) => a - b);
+  if (durations.length === 0) return null;
+  const middle = Math.floor(durations.length / 2);
+  return durations.length % 2 ? durations[middle] : (durations[middle - 1] + durations[middle]) / 2;
 }
 
 export function formatNotes({ runs, leftOut }, { project }) {

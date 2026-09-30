@@ -21,6 +21,7 @@ function setup(options = {}) {
       calls.push(`return: ${reason}`);
       view = 'claude';
     },
+    switchOn: 'busy',
     ...options,
   });
   return { policy, calls, setView: (next) => (view = next) };
@@ -161,4 +162,67 @@ test("a subagent finishing after Claude's Stop does not bring the focus view bac
   policy.agentEvent({ type: 'subagent-done', sessionId: 's' });
   mock.timers.tick(20_000);
   assert.deepEqual(calls, ['open focus', 'return: done']);
+});
+
+const edit = { type: 'edit', sessionId: 's', path: 'src/a.ts', changes: [] };
+const task = (id) => ({ type: 'task-create', sessionId: 's', id, subject: `step ${id}`, activeForm: `doing ${id}` });
+
+test('by default the quiz waits for the first edit, even after the delay', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent({ type: 'read', sessionId: 's', target: 'a' });
+  mock.timers.tick(20_000);
+  assert.deepEqual(calls, []);
+  policy.agentEvent(edit);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('an edit before the delay still waits for the delay', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent(edit);
+  mock.timers.tick(7999);
+  assert.deepEqual(calls, []);
+  mock.timers.tick(1);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('a plan of two steps is something to quiz on', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent(task('1'));
+  mock.timers.tick(8000);
+  assert.deepEqual(calls, []);
+  policy.agentEvent(task('2'));
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('a plan of three or more steps halves the wait', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent({ type: 'todos', sessionId: 's', todos: [1, 2, 3].map((n) => ({ subject: `s${n}`, status: 'pending', activeForm: '' })) });
+  mock.timers.tick(3999);
+  assert.deepEqual(calls, []);
+  mock.timers.tick(1);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('in a project whose runs are usually short, the quiz waits for a second edit', () => {
+  const { policy, calls } = setup({ switchOn: 'edit', shortRuns: true });
+  policy.agentEvent(busy);
+  policy.agentEvent(edit);
+  mock.timers.tick(30_000);
+  assert.deepEqual(calls, []);
+  policy.agentEvent(edit);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('a new prompt starts counting edits and plan steps again', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  policy.agentEvent(edit);
+  policy.agentEvent(done);
+  policy.agentEvent(busy);
+  mock.timers.tick(20_000);
+  assert.deepEqual(calls, []);
 });

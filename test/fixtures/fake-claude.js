@@ -46,6 +46,10 @@ function runHook(eventName) {
   if (!command) return;
   const payloads = {
     UserPromptSubmit: { prompt: 'add retry to token refresh' },
+    PostToolUse: {
+      tool_name: 'Edit',
+      tool_input: { file_path: 'src/retry.ts', old_string: 'return fetchToken();', new_string: 'return withRetry(fetchToken);' },
+    },
     Stop: {},
     Notification: { message: 'Claude needs your permission to use Bash' },
   };

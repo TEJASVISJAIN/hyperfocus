@@ -207,6 +207,7 @@ test('the focus view opens by itself while the agent works and hands back with a
   const focus = startFocus([], { env: { HYPERFOCUS_DELAY_MS: '100' } });
   await focus.nextReport('start');
   focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
   focus.terminal.write('hook 2600 Stop\r'); // after the 2s typing grace
   await focus.waitForScreen(/\x1b\[\?1049h/);
   const screen = await focus.waitForScreen(/\x1b\[\?1049l[\s\S]*\x07/);
@@ -305,6 +306,7 @@ test('when Claude finishes mid-question, the quiz stays up and Enter goes back',
   const focus = startFocus([], { env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
   await focus.nextReport('start');
   focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
   focus.terminal.write('hook 3500 Stop\r'); // after the 2s typing grace and the first question
   await focus.waitForScreen(/Why retry refreshToken\?/);
   await focus.waitForScreen(/Claude finished/);

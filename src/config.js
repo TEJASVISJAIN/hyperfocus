@@ -7,7 +7,7 @@ export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
 /**
  * @typedef {{
  *   delayMs: number, model: string, questionsPerBatch: number, kinds: string[],
- *   notifications: boolean, mouse: boolean, live: boolean
+ *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy'
  * }} Config
  */
 
@@ -19,6 +19,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   kinds: [...QUESTION_KINDS],
   notifications: true, // macOS notification when Claude needs you (the bell always rings)
   mouse: true, // click options in the focus view
+  switchOn: 'edit', // 'edit': wait for something to quiz on (an edit or a plan); 'busy': switch after delayMs, like 0.2.0
   live: false, // start with the live panel open (feed of agent steps + peek at Claude); `l` toggles it
 });
 
@@ -31,6 +32,7 @@ const RULES = {
   notifications: [isBoolean, 'must be true or false'],
   mouse: [isBoolean, 'must be true or false'],
   live: [isBoolean, 'must be true or false'],
+  switchOn: [(value) => value === 'edit' || value === 'busy', 'must be "edit" or "busy"'],
 };
 
 export const defaultConfigPath = () => join(dataDir(), 'config.json');

@@ -6,7 +6,7 @@ import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
 import { buildHookSettings } from './hook-settings.js';
 import { createHistory, recentAccuracy } from './history.js';
-import { createRunLog } from './notes.js';
+import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { buildRecap, reviewChecklist } from './recap.js';
 import { createScreen, peekLines } from './screen.js';
@@ -14,6 +14,14 @@ import { createScreen, peekLines } from './screen.js';
 const TYPING_GRACE_MS = 2000;
 const CLOCK_TICK_MS = 1000;
 const PEEK_LINES = 4;
+
+const SHORT_RUN_MARGIN_MS = 10_000;
+
+// Runs here usually end soon after the quiz would open, so one edit isn't enough to switch for.
+const isShortRunProject = (cwd, delayMs) => {
+  const median = medianRunMs({ cwd });
+  return median !== null && median < delayMs + SHORT_RUN_MARGIN_MS;
+};
 
 export async function runFocus(claudePath, claudeArgs, { auto, config }) {
   const { stdout } = process;
@@ -134,6 +142,8 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
     delayMs: config.delayMs,
     typingGraceMs: TYPING_GRACE_MS,
     auto,
+    switchOn: config.switchOn,
+    shortRuns: isShortRunProject(cwd, config.delayMs),
     currentView: () => screen.view,
     openFocus,
     returnToClaude: handBack,
