@@ -5,12 +5,13 @@ import { parseFocusArgs } from '../src/cli-args.js';
 import { loadConfig, setProjectSetting } from '../src/config.js';
 import { INTRO_LINES, INTRO_TITLE } from '../src/focus-view.js';
 import { formatStats, missedStillInCode, projectLabel, readInsights, readStats } from '../src/history.js';
+import { formatBrief, installHook, uninstallHook } from '../src/git-hook.js';
 import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { claudeArgs, auto, stats, notes, review, intro, quiet, here, md } = parseFocusArgs(process.argv.slice(2));
+const { claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -36,6 +37,28 @@ if (stats) {
 if (notes) {
   const cwd = process.cwd();
   process.stdout.write(formatNotes(readNotes({ cwd }), { project: projectLabel(cwd), checklist: missedStillInCode({ cwd }) }));
+  process.exit(0);
+}
+if (wantsHook || wantsNoHook) {
+  try {
+    if (wantsHook) {
+      const { path, alreadyInstalled } = installHook();
+      process.stdout.write(alreadyInstalled ? `Already installed in ${path}\n` : `Installed in ${path}: before each push, missed questions still in the code are listed. It never blocks a push.\n`);
+    } else {
+      const { path, removed } = uninstallHook();
+      process.stdout.write(removed ? `Removed from ${path}\n` : 'No hyperfocus hook to remove here.\n');
+    }
+  } catch (error) {
+    process.stderr.write(`hyperfocus: ${error.message}\n`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+if (review && brief) {
+  // For the pre-push hook: never fail, never wait for input.
+  try {
+    process.stdout.write(formatBrief(missedStillInCode({ cwd: process.cwd() })));
+  } catch {}
   process.exit(0);
 }
 if (review && md) {
