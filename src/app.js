@@ -1,10 +1,10 @@
+import { claudeAgent } from './agents/claude.js';
 import { alertUser } from './alert.js';
 import { changedFiles } from './activity-log.js';
 import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
 import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
-import { buildHookSettings } from './hook-settings.js';
 import { createHistory, recentAccuracy, recentBadQuestions } from './history.js';
 import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
@@ -24,18 +24,28 @@ const isShortRunProject = (cwd, delayMs) => {
   return median !== null && median < delayMs + SHORT_RUN_MARGIN_MS;
 };
 
-export async function runFocus(claudePath, claudeArgs, { auto, config }) {
+/**
+ * Runs the agent at `agentPath` (Claude unless `agent` says otherwise) with the quiz around it.
+ * @param {string} agentPath
+ * @param {string[]} agentArgs
+ * @param {{ auto: boolean, config: import('./config.js').Config, agent?: import('./agents/claude.js').AgentAdapter }} options
+ */
+export async function runFocus(agentPath, agentArgs, options) {
+  const { auto, config, agent = claudeAgent } = options;
   const { stdout } = process;
-  const eventServer = await startEventServer();
+  const eventServer = await startEventServer({ toEvent: agent.toEvent });
   const write = (data) => stdout.write(data);
+  const launch = agent.prepareLaunch({ socketPath: eventServer.socketPath, env: process.env });
+  process.on('exit', () => launch.cleanup());
 
-  const child = startClaudeInPty(claudePath, ['--settings', JSON.stringify(buildHookSettings()), ...claudeArgs], {
-    env: { ...process.env, HYPERFOCUS_SOCK: eventServer.socketPath },
+  const child = startClaudeInPty(agentPath, [...launch.args, ...agentArgs], {
+    env: { ...process.env, ...launch.env },
     onOutput: (data) => screen.claudeOutput(data),
     onExit: (result) => {
       screen.showClaude();
       restoreTerminal();
       eventServer.close();
+      launch.cleanup();
       process.exit(exitCodeFor(result));
     },
   });
@@ -46,7 +56,8 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
   const loggedRuns = new WeakSet();
   let sessionId = null;
   const session = createFocusSession({
-    claudePath,
+    claudePath: agentPath,
+    agent,
     config,
     projectAccuracy: recentAccuracy({ cwd }),
     badQuestions: () => recentBadQuestions({ cwd }),
@@ -128,7 +139,7 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
   const handBack = (reason) => {
     // Rung once the screen shows what the user is being called back to.
     const alert = () =>
-      alertUser(reason === 'done' ? 'Claude finished — back to you' : lastNeedsInputMessage || 'Claude needs you', write, {
+      alertUser(reason === 'done' ? `${agent.name} finished — back to you` : lastNeedsInputMessage || `${agent.name} needs you`, write, {
         notify: config.notifications,
       });
     // Mid-question: keep the question and let the user choose to go back or keep going.

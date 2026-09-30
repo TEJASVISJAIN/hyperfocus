@@ -1,40 +1,32 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { surroundingCode } from './code-context.js';
-import { debugLog } from './debug-log.js';
+import { claudeAgent } from './agents/claude.js';
 import { anchorFor } from './code-anchors.js';
-import { launchCommand } from './launch.js';
+import { surroundingCode } from './code-context.js';
 import { DEFAULT_CONFIG } from './config.js';
+import { debugLog } from './debug-log.js';
+import { launchCommand } from './launch.js';
 import { FOLLOW_UP_SYSTEM_PROMPT, SYSTEM_PROMPT, buildFollowUpPrompt, buildQuizPrompt, parseQuizReply, shuffleOptions } from './quiz-prompt.js';
 
 const NEW_EDITS_BEFORE_REFRESH = 3;
 
-// A lean one-shot Claude: no tools, no MCP, no hooks, no saved session, and our own system prompt.
-// Cutting the default context this way makes each call roughly 70x cheaper. The user's settings
-// files still load, because that is where auth such as apiKeyHelper lives.
-const modelArgs = (systemPrompt, model) => [
-  '-p',
-  '--model', model,
-  '--output-format', 'json',
-  '--tools', '',
-  '--no-session-persistence',
-  '--setting-sources', 'user,project,local',
-  '--settings', JSON.stringify({ disableAllHooks: true }),
-  '--strict-mcp-config',
-  '--system-prompt', systemPrompt,
-];
+// The child writes questions, so hyperfocus's own hooks must not follow it.
+function writerEnv(writer, env) {
+  /** @type {NodeJS.ProcessEnv} */
+  const childEnv = { ...writer.env(env), HYPERFOCUS_CHILD: '1' };
+  delete childEnv.HYPERFOCUS_SOCK;
+  return childEnv;
+}
 
 /**
  * One tiny call made exactly the way questions are written, for `hyperfocus --doctor`.
  * @returns {Promise<{ ok: boolean, detail: string }>}
  */
-export function probeQuestionWriter({ claudePath, model = DEFAULT_CONFIG.model, env = process.env, timeoutMs = 60_000 }) {
+export function probeQuestionWriter({ claudePath, writer = claudeAgent.writer, model = DEFAULT_CONFIG.model, env = process.env, timeoutMs = 60_000 }) {
   return new Promise((resolve) => {
-    /** @type {NodeJS.ProcessEnv} */
-    const childEnv = { ...env, HYPERFOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
-    delete childEnv.HYPERFOCUS_SOCK;
+    const childEnv = writerEnv(writer, env);
     const startedAt = Date.now();
-    const launch = launchCommand(claudePath, modelArgs('Reply with the single word: ok', model));
+    const launch = launchCommand(claudePath, writer.args('Reply with the single word: ok', model));
     const child = spawn(launch.command, launch.args, { env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -45,12 +37,10 @@ export function probeQuestionWriter({ claudePath, model = DEFAULT_CONFIG.model, 
     child.on('close', () => {
       clearTimeout(timer);
       const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-      try {
-        const { result, is_error: isError } = JSON.parse(stdout);
-        resolve(isError ? { ok: false, detail: String(result).slice(0, 160) } : { ok: true, detail: `${model} answered in ${seconds}s` });
-      } catch {
-        resolve({ ok: false, detail: (stderr || stdout || 'no reply').trim().split('\n')[0].slice(0, 160) });
-      }
+      const reply = writer.parse(stdout);
+      if (!reply) resolve({ ok: false, detail: (stderr || stdout || 'no reply').trim().split('\n')[0].slice(0, 160) });
+      else if (reply.isError) resolve({ ok: false, detail: reply.text.slice(0, 160) });
+      else resolve({ ok: true, detail: `${model ?? 'the default model'} answered in ${seconds}s` });
     });
     child.stdin.on('error', () => {});
     child.stdin.end('ok?');
@@ -65,6 +55,7 @@ export function probeQuestionWriter({ claudePath, model = DEFAULT_CONFIG.model, 
  */
 export function createQuizEngine({
   claudePath,
+  writer = claudeAgent.writer, // how the agent's print mode is called and read
   env = process.env,
   model = DEFAULT_CONFIG.model,
   kinds = DEFAULT_CONFIG.kinds,
@@ -75,10 +66,7 @@ export function createQuizEngine({
   readContext = (run) => surroundingCode(run, { cwd: process.cwd() }),
 }) {
   const engine = new EventEmitter();
-  /** @type {NodeJS.ProcessEnv} */
-  // Haiku thinks for ~3k tokens by default here, which turned a 6s batch into 30s.
-  const childEnv = { ...env, HYPERFOCUS_CHILD: '1', MAX_THINKING_TOKENS: '0' };
-  delete childEnv.HYPERFOCUS_SOCK;
+  const childEnv = writerEnv(writer, env);
 
   let inFlight = null;
   let runStartedAt = null;
@@ -128,7 +116,7 @@ export function createQuizEngine({
 
   function askModel(prompt, call, systemPrompt) {
     return new Promise((resolve) => {
-      const launch = launchCommand(claudePath, modelArgs(systemPrompt, model));
+      const launch = launchCommand(claudePath, writer.args(systemPrompt, model));
       const child = spawn(launch.command, launch.args, { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
       call.child = child;
       let stdout = '';
@@ -140,14 +128,10 @@ export function createQuizEngine({
       });
       child.on('close', () => {
         if (call.cancelled) return resolve(null);
-        try {
-          const { result, is_error: isError } = JSON.parse(stdout);
-          if (isError) debugLog('quiz model error', String(result).slice(0, 200));
-          resolve({ text: String(result ?? ''), isError: Boolean(isError) });
-        } catch {
-          debugLog('quiz model output unreadable', stdout.slice(0, 200));
-          resolve(null);
-        }
+        const reply = writer.parse(stdout);
+        if (!reply) debugLog('quiz model output unreadable', stdout.slice(0, 200));
+        else if (reply.isError) debugLog('quiz model error', reply.text.slice(0, 200));
+        resolve(reply);
       });
       child.stdin.on('error', () => {});
       child.stdin.end(prompt);

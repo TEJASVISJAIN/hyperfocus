@@ -262,3 +262,14 @@ test('colour is off with NO_COLOR set (and not empty) or TERM=dumb', () => {
   assert.equal(colorAllowed({ NO_COLOR: '' }), true);
   assert.equal(colorAllowed({ TERM: 'dumb' }), false);
 });
+
+test('the agent is named on screen, so another agent reads right', () => {
+  const view = createFocusView({ onAnswer: () => {}, onExit: () => {}, agentName: 'Codex' });
+  view.addQuestions([retryQuestion]);
+  view.handleKey('1');
+  view.showFinished({ reason: 'done', changedFiles: [], score: view.score });
+  const text = screenText(view.render({ cols: 100, rows: 30 }));
+  assert.match(text, /Esc back to Codex/);
+  assert.match(text, /Codex finished/);
+  assert.doesNotMatch(text, /Claude/);
+});

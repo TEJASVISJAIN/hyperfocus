@@ -40,7 +40,7 @@ export function buildRecap({ run, summary, score, visibleMs, answeredThisVisit, 
 }
 
 /** The recap as a card: its title, a detail for the title bar, and the body lines (no indent). */
-export function renderRecap(recap, { width }) {
+export function renderRecap(recap, { width, agentName = 'Claude' }) {
   const { changedFiles: files, score } = recap;
   const lines = [];
   if (recap.summary) lines.push(...wrap(recap.summary, width), '');
@@ -58,6 +58,6 @@ export function renderRecap(recap, { width }) {
       lines.push('  ' + DIM + label + RESET + '  ' + truncate(question, Math.max(4, width - fileWidth - 4)));
     }
   }
-  const detail = DIM + (recap.reason === 'done' ? 'Claude finished' : 'Claude needs your input') + RESET;
+  const detail = DIM + (recap.reason === 'done' ? `${agentName} finished` : `${agentName} needs your input`) + RESET;
   return { title: BOLD + 'While you were away' + RESET, detail, lines };
 }

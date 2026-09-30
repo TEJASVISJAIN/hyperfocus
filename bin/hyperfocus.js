@@ -5,7 +5,7 @@ import { parseFocusArgs } from '../src/cli-args.js';
 import { DEFAULT_CONFIG, loadConfig, setProjectSetting } from '../src/config.js';
 import { dataDir } from '../src/data-dir.js';
 import { defaultChecks, formatDoctor, runDoctor } from '../src/doctor.js';
-import { INTRO_LINES, INTRO_TITLE } from '../src/focus-view.js';
+import { INTRO_TITLE, introLines } from '../src/focus-view.js';
 import { formatStats, missedStillInCode, projectLabel, readInsights, readStats } from '../src/history.js';
 import { formatBrief, installHook, uninstallHook } from '../src/git-hook.js';
 import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
@@ -30,7 +30,7 @@ if (quiet && here) {
 }
 if (quiet) config.quiet = true;
 if (intro) {
-  process.stdout.write([INTRO_TITLE, '', ...INTRO_LINES, ''].join('\n'));
+  process.stdout.write([INTRO_TITLE, '', ...introLines(), ''].join('\n'));
   process.exit(0);
 }
 if (stats) {

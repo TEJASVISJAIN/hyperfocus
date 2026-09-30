@@ -29,15 +29,15 @@ const MAX_PLAN_CELLS = 10;
 
 export const INTRO_TITLE = 'Welcome to hyperfocus';
 // Shown the first time the quiz takes the screen, and by `hyperfocus --intro`.
-export const INTRO_LINES = [
-  'Claude is busy, so hyperfocus switched to a quiz about the change it is making.',
-  'The moment Claude finishes or needs you, you are back in Claude with a recap.',
+export const introLines = (agent = 'Claude') => [
+  `${agent} is busy, so hyperfocus switched to a quiz about the change it is making.`,
+  `The moment ${agent} finishes or needs you, you are back in ${agent} with a recap.`,
   '',
-  'Esc          back to Claude now',
-  'Ctrl-]       switch between Claude and the quiz any time',
+  `Esc          back to ${agent} now`,
+  `Ctrl-]       switch between ${agent} and the quiz any time`,
   '↑↓ Enter     choose and answer, or press 1–4',
   's            skip a question',
-  'l            show what Claude is doing right now',
+  `l            show what ${agent} is doing right now`,
 ];
 
 /**
@@ -67,8 +67,9 @@ export function createFocusView({
   onKeepGoing = undefined,
   onExit = undefined,
   onQuiet = undefined,
+  agentName = 'Claude', // what the agent is called on screen
   title = 'hyperfocus',
-  backHint = 'Esc back to Claude',
+  backHint = `Esc back to ${agentName}`,
   idleText = 'Thinking of a question about this change…',
   spinner = true,
   summaryHeading = "What's happening",
@@ -249,15 +250,15 @@ export function createFocusView({
       for (const { question, chosen } of pendingPredictions) {
         const guess = question.options[chosen];
         if (!question.options.includes(path)) {
-          result = { text: `Claude edited ${path}, which wasn't an option`, good: null, at };
+          result = { text: `${agentName} edited ${path}, which wasn't an option`, good: null, at };
           continue;
         }
         const isCorrect = guess === path;
         score(isCorrect);
         onAnswer({ question, chosen, correct: isCorrect, skipped: false });
         result = isCorrect
-          ? { text: `✔ Prediction right: Claude edited ${path}`, good: true, at }
-          : { text: `✘ Prediction missed: Claude edited ${path}, not ${guess}`, good: false, at };
+          ? { text: `✔ Prediction right: ${agentName} edited ${path}`, good: true, at }
+          : { text: `✘ Prediction missed: ${agentName} edited ${path}, not ${guess}`, good: false, at };
       }
       pendingPredictions = [];
     },
@@ -347,13 +348,13 @@ export function createFocusView({
 
       if (intro) {
         // Key lines keep their spacing, which lines the keys up, whenever they fit.
-        const body = INTRO_LINES.flatMap((line) => (!line ? [''] : widthOf(line) <= inner ? [line] : wrap(line, inner)));
+        const body = introLines(agentName).flatMap((line) => (!line ? [''] : widthOf(line) <= inner ? [line] : wrap(line, inner)));
         const screen = [...header, ...card(box, BOLD + INTRO_TITLE + RESET, '', body), ...hintRow([['any key', 'start']], cols, margin)];
         return finish(screen.slice(0, rows));
       }
       if (recap) {
-        const { title: recapTitle, detail, lines: body } = renderRecap(recap.card, { width: inner });
-        const screen = [...header, ...card(box, recapTitle, detail, body), ...hintRow([['any key', 'back to Claude']], cols, margin)];
+        const { title: recapTitle, detail, lines: body } = renderRecap(recap.card, { width: inner, agentName });
+        const screen = [...header, ...card(box, recapTitle, detail, body), ...hintRow([['any key', `back to ${agentName}`]], cols, margin)];
         return finish(screen.slice(0, rows));
       }
 
@@ -376,7 +377,7 @@ export function createFocusView({
       const feedBlock = !liveShown ? [] : fitSection('Live', feed.slice(-MAX_FEED_STEPS).map((step) => feedLine(step, textWidth, margin)), room, cols);
       room -= feedBlock.length;
       const peekLine = (line) => margin + CYAN + PEEK_GUTTER + RESET + truncate(line, textWidth - PEEK_GUTTER.length);
-      const peekBlock = !liveShown ? [] : fitSection('Claude', peek.slice(-MAX_PEEK_LINES).map(peekLine), room, cols);
+      const peekBlock = !liveShown ? [] : fitSection(agentName, peek.slice(-MAX_PEEK_LINES).map(peekLine), room, cols);
 
       return finish([...header, ...mainBlock, ...fittedSummary, ...feedBlock, ...peekBlock].slice(0, rows));
     },
@@ -426,14 +427,14 @@ export function createFocusView({
   // Keys that do something right now, as one row under the card.
   function currentHints() {
     const live = liveToggle ? [['l', liveShown ? 'hide live view' : 'live view']] : [];
-    const back = onExit ? [['esc', 'back to Claude']] : [];
+    const back = onExit ? [['esc', `back to ${agentName}`]] : [];
     const quiet = onQuiet ? [['z', 'quiet']] : [];
     const question = current();
     if (confirmingQuiet) return [['z', 'again: no more automatic quizzes this session'], ['any other key', 'cancel']];
     if (!question) {
       return [
-        ...(onExit ? [['enter or esc', 'back to Claude']] : []),
-        ...(liveToggle && !liveShown ? [['l', 'see what Claude is doing']] : live),
+        ...(onExit ? [['enter or esc', `back to ${agentName}`]] : []),
+        ...(liveToggle && !liveShown ? [['l', `see what ${agentName} is doing`]] : live),
         ...(onQuiet ? [['z', 'quiet for this session']] : []),
       ];
     }
@@ -447,13 +448,13 @@ export function createFocusView({
     if (!finished || !current()) return [];
     const files = finished.changedFiles.length;
     const headline = [
-      finished.reason === 'done' ? 'Claude finished' : 'Claude needs your input',
+      finished.reason === 'done' ? `${agentName} finished` : `${agentName} needs your input`,
       files ? `${files} file${files === 1 ? '' : 's'} changed` : 'no files changed',
       ...(finished.score.answered ? [`quiz ${finished.score.correct}/${finished.score.answered}`] : []),
     ].join(' · ');
     return [
       margin + GREEN + BOLD + '✔ ' + truncate(headline, Math.max(4, inner)) + RESET,
-      ...hintRow([['enter', 'back to Claude'], ['c', 'keep going']], cols, margin),
+      ...hintRow([['enter', `back to ${agentName}`], ['c', 'keep going']], cols, margin),
       '',
     ];
   }
@@ -479,7 +480,7 @@ export function createFocusView({
     if (feedback) {
       body.push('');
       if (question.kind === 'predict') {
-        body.push(...wrap(`Locked in: ${question.options[feedback.chosen]}. The next file Claude edits settles it.`, inner));
+        body.push(...wrap(`Locked in: ${question.options[feedback.chosen]}. The next file ${agentName} edits settles it.`, inner));
       } else {
         const wasRight = feedback.chosen === question.answer;
         body.push(wasRight ? GREEN + BOLD + '✔ Correct' + RESET : RED + BOLD + '✘ Not quite' + RESET + DIM + ` · the answer is ${question.answer + 1}` + RESET);

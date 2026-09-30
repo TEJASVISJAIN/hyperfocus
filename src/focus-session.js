@@ -1,4 +1,5 @@
 import { createActivityLog, relativeToProject } from './activity-log.js';
+import { claudeAgent } from './agents/claude.js';
 import { DEFAULT_CONFIG } from './config.js';
 import { createFocusView } from './focus-view.js';
 import { createQuizEngine } from './quiz-engine.js';
@@ -18,6 +19,7 @@ export function createFocusSession({
   onExit = undefined,
   onQuiet = undefined,
   config = DEFAULT_CONFIG,
+  agent = claudeAgent,
   projectAccuracy = { answered: 0, correct: 0 },
   badQuestions = () => [],
 }) {
@@ -25,6 +27,7 @@ export function createFocusSession({
   let missedThisRun = []; // wrong answers in the current run, for the "worth a look" checklist
   const engine = createQuizEngine({
     claudePath,
+    writer: agent.writer,
     model: config.model,
     kinds: config.kinds,
     questionsPerBatch: config.questionsPerBatch,
@@ -36,6 +39,7 @@ export function createFocusSession({
   });
   let keepGoing = false; // chose to carry on with the quiz after Claude finished
   const view = createFocusView({
+    agentName: agent.name,
     live: config.live,
     color: colorAllowed(),
     animations: config.animations,
