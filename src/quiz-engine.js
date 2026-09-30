@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { surroundingCode } from './code-context.js';
 import { debugLog } from './debug-log.js';
 import { anchorFor } from './code-anchors.js';
 import { DEFAULT_CONFIG } from './config.js';
@@ -36,6 +37,7 @@ export function createQuizEngine({
   questionsPerBatch = DEFAULT_CONFIG.questionsPerBatch,
   accuracy = () => undefined,
   random = Math.random,
+  readContext = (run) => surroundingCode(run, { cwd: process.cwd() }),
 }) {
   const engine = new EventEmitter();
   /** @type {NodeJS.ProcessEnv} */
@@ -66,7 +68,7 @@ export function createQuizEngine({
     inFlight = call;
     editsAtLastBatch = run.edits.length;
     activityAtLastBatch = activityOf(run);
-    const prompt = buildQuizPrompt(run, askedQuestions, { kinds, count: questionsPerBatch, accuracy: accuracy() });
+    const prompt = buildQuizPrompt(run, askedQuestions, { kinds, count: questionsPerBatch, accuracy: accuracy(), context: readContext(run) });
 
     let batch = null;
     for (let attempt = 1; attempt <= 2 && !call.cancelled; attempt++) {

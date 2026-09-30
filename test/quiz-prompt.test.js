@@ -108,3 +108,10 @@ test('with only predictions allowed and the run over, "why" questions are asked 
   assert.match(buildQuizPrompt(finished, [], { kinds: ['predict'], count: 3 }), /"why"/);
   assert.equal(parseQuizReply(reply([why]), { run: finished, kinds: ['predict'] }).questions.length, 1);
 });
+
+test('surrounding code goes in as context, and questions must still be about the changes', () => {
+  const prompt = buildQuizPrompt(run, [], { kinds: ['why'], count: 3, context: [{ file: 'src/retry.ts', text: 'function sleep(ms) {}' }] });
+  assert.match(prompt, /<context file="src\/retry.ts">\nfunction sleep\(ms\) \{\}\n<\/context>/);
+  assert.match(prompt, /only to understand the changes/);
+  assert.doesNotMatch(buildQuizPrompt(run, [], { kinds: ['why'], count: 3 }), /<context/);
+});

@@ -32,7 +32,7 @@ export const SYSTEM_PROMPT =
   'You help a developer stay engaged with the change an AI coding agent is making in their codebase ' +
   'right now, so they understand it when they review it. Reply with only a JSON object, no prose.';
 
-export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined } = {}) {
+export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined, context = [] } = {}) {
   const sections = [`The developer asked the agent:\n<request>\n${run.prompt || '(no prompt captured)'}\n</request>`];
 
   if (run.reads.length) sections.push(`Files and searches the agent has looked at:\n${bullets(run.reads)}`);
@@ -42,6 +42,13 @@ export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 
       ? `Changes so far (- removed, + added):\n${run.edits.map((edit) => `### ${edit.path}\n${edit.diff}`).join('\n\n')}`
       : 'No changes yet: the agent is still reading and planning.',
   );
+
+  if (context.length) {
+    sections.push(
+      'The code around those changes as it is now, only to understand the changes; every question must still be about the changes above:\n' +
+        context.map(({ file, text }) => `<context file="${file}">\n${text}\n</context>`).join('\n'),
+    );
+  }
 
   if (run.commands.length) sections.push(`Commands the agent ran:\n${bullets(run.commands)}`);
   if (askedQuestions.length) sections.push(`Questions already asked (do not repeat or rephrase these):\n${bullets(askedQuestions)}`);
