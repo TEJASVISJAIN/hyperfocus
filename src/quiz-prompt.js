@@ -32,7 +32,7 @@ export const SYSTEM_PROMPT =
   'You help a developer stay engaged with the change an AI coding agent is making in their codebase ' +
   'right now, so they understand it when they review it. Reply with only a JSON object, no prose.';
 
-export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined, context = [] } = {}) {
+export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined, context = [], avoid = [] } = {}) {
   const sections = [`The developer asked the agent:\n<request>\n${run.prompt || '(no prompt captured)'}\n</request>`];
 
   if (run.reads.length) sections.push(`Files and searches the agent has looked at:\n${bullets(run.reads)}`);
@@ -52,6 +52,8 @@ export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 
 
   if (run.commands.length) sections.push(`Commands the agent ran:\n${bullets(run.commands)}`);
   if (askedQuestions.length) sections.push(`Questions already asked (do not repeat or rephrase these):\n${bullets(askedQuestions)}`);
+
+  if (avoid.length) sections.push(`The developer rated these questions as bad; do not ask anything like them:\n${bullets(avoid)}`);
 
   const allowedKinds = kindsFor(run, kinds);
   sections.push(

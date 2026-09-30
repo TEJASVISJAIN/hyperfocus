@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createHistory, missedStillInCode, readStats, recentAccuracy } from '../src/history.js';
+import { createHistory, missedStillInCode, readStats, recentAccuracy, recentBadQuestions } from '../src/history.js';
 
 const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
 const question = { q: 'Why retry?', options: ['a', 'b', 'c'], answer: 1, why: 'w' };
@@ -151,4 +151,23 @@ test('hand-edited or damaged history entries are never brought back for review',
   const base = { cwd: '/repo', question: 'Q?', options: ['a', 'b'], answer: 0, why: 'w', correct: false, skipped: false, anchor };
   writeFileSync(path, [{ ...base, question: 'numbers?', options: [1, 2] }, { ...base, question: 'code?', code: 42 }, { ...base, question: 'marks?', code: 'x', codeMarks: 'nope' }].map((entry) => JSON.stringify(entry)).join('\n'));
   assert.deepEqual(missedStillInCode({ cwd: '/repo', path, readFile: () => 'export const kept = computeKept();' }), []);
+});
+
+test('a question rated bad never comes back for review, is left out of stats, and is remembered as one to avoid', () => {
+  const path = join(tempDir(), 'history.jsonl');
+  const history = createHistory({ path });
+  const anchor = { file: 'src/retry.ts', anchors: ['export async function withRetry(fn) {'] };
+  const where = { cwd: '/repo', sessionId: 's', files: [] };
+  history.append({ question: { ...question, q: 'Bad but missed?', anchor }, chosen: 0, correct: false, skipped: false }, where);
+  history.append({ question: { ...question, q: 'Bad but missed?', anchor }, chosen: null, correct: null, skipped: true, rating: 'bad' }, where);
+  history.append({ question: { ...question, q: 'Fair and missed?', anchor }, chosen: 0, correct: false, skipped: false }, where);
+  for (const n of [1, 2, 3, 4, 5, 6]) history.append({ question: { ...question, q: `Bad ${n}?` }, chosen: null, correct: null, skipped: true, rating: 'bad' }, where);
+  history.append({ question: { ...question, q: 'Elsewhere bad?' }, chosen: null, correct: null, skipped: true, rating: 'bad' }, { ...where, cwd: '/other' });
+
+  assert.equal(JSON.parse(readFileSync(path, 'utf8').split('\n')[1]).rating, 'bad');
+  const readFile = () => 'export async function withRetry(fn) {\n';
+  assert.deepEqual(missedStillInCode({ cwd: '/repo', path, readFile }).map((entry) => entry.q), ['Fair and missed?']);
+  const [repo] = readStats(path);
+  assert.equal(repo.answered, 1, 'the answer to the bad question is not counted');
+  assert.deepEqual(recentBadQuestions({ cwd: '/repo', path }), ['Bad 2?', 'Bad 3?', 'Bad 4?', 'Bad 5?', 'Bad 6?']);
 });

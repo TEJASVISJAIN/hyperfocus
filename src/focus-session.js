@@ -18,6 +18,7 @@ export function createFocusSession({
   onQuiet = undefined,
   config = DEFAULT_CONFIG,
   projectAccuracy = { answered: 0, correct: 0 },
+  badQuestions = () => [],
 }) {
   const log = createActivityLog();
   let missedThisRun = []; // wrong answers in the current run, for the "worth a look" checklist
@@ -30,12 +31,14 @@ export function createFocusSession({
       answered: projectAccuracy.answered + view.score.answered,
       correct: projectAccuracy.correct + view.score.correct,
     }),
+    avoid: badQuestions,
   });
   let keepGoing = false; // chose to carry on with the quiz after Claude finished
   const view = createFocusView({
     live: config.live,
     onAnswer: (entry) => {
       if (entry.correct === false) missedThisRun.push(entry);
+      if (entry.rating === 'bad') missedThisRun = missedThisRun.filter((missed) => missed.question !== entry.question);
       onAnswer?.(entry, log.run);
       askForMoreIfNeeded();
     },

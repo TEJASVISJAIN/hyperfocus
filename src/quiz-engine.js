@@ -37,6 +37,7 @@ export function createQuizEngine({
   questionsPerBatch = DEFAULT_CONFIG.questionsPerBatch,
   accuracy = () => undefined,
   random = Math.random,
+  avoid = () => [],
   readContext = (run) => surroundingCode(run, { cwd: process.cwd() }),
 }) {
   const engine = new EventEmitter();
@@ -68,7 +69,7 @@ export function createQuizEngine({
     inFlight = call;
     editsAtLastBatch = run.edits.length;
     activityAtLastBatch = activityOf(run);
-    const prompt = buildQuizPrompt(run, askedQuestions, { kinds, count: questionsPerBatch, accuracy: accuracy(), context: readContext(run) });
+    const prompt = buildQuizPrompt(run, askedQuestions, { kinds, count: questionsPerBatch, accuracy: accuracy(), context: readContext(run), avoid: avoid() });
 
     let batch = null;
     for (let attempt = 1; attempt <= 2 && !call.cancelled; attempt++) {

@@ -5,7 +5,7 @@ import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
 import { buildHookSettings } from './hook-settings.js';
-import { createHistory, recentAccuracy } from './history.js';
+import { createHistory, recentAccuracy, recentBadQuestions } from './history.js';
 import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
 import { buildRecap, reviewChecklist } from './recap.js';
@@ -49,6 +49,7 @@ export async function runFocus(claudePath, claudeArgs, { auto, config }) {
     claudePath,
     config,
     projectAccuracy: recentAccuracy({ cwd }),
+    badQuestions: () => recentBadQuestions({ cwd }),
     redraw: () => screen.redrawFocus(),
     onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run) }),
     onBack: () => {

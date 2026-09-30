@@ -115,3 +115,8 @@ test('surrounding code goes in as context, and questions must still be about the
   assert.match(prompt, /only to understand the changes/);
   assert.doesNotMatch(buildQuizPrompt(run, [], { kinds: ['why'], count: 3 }), /<context/);
 });
+
+test('questions the developer rated bad are passed on as ones to avoid', () => {
+  const prompt = buildQuizPrompt(run, [], { kinds: ['why'], count: 3, avoid: ['What does const mean?'] });
+  assert.match(prompt, /rated these questions as bad[\s\S]*- What does const mean\?/);
+});

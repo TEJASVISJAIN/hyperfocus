@@ -13,7 +13,7 @@ const MAX_REVIEW_QUESTIONS = 10;
 // Every answered or skipped question, kept for --stats and so --review can bring back the ones you missed.
 export function createHistory({ path = defaultHistoryPath() } = {}) {
   return {
-    append({ question, chosen, correct, skipped }, { cwd, sessionId, files, source = 'live' }) {
+    append({ question, chosen, correct, skipped, rating = undefined }, { cwd, sessionId, files, source = 'live' }) {
       const entry = {
         ts: new Date().toISOString(),
         cwd,
@@ -29,6 +29,7 @@ export function createHistory({ path = defaultHistoryPath() } = {}) {
         chosen,
         correct,
         skipped,
+        ...(rating ? { rating } : {}),
         files,
       };
       try {
@@ -41,7 +42,20 @@ export function createHistory({ path = defaultHistoryPath() } = {}) {
   };
 }
 
-const readEntries = (path) => readJsonLines(path).filter((entry) => entry?.cwd);
+// Entries for questions the user rated bad are left out of everything: review, stats, accuracy.
+const readEntries = (path) => {
+  const entries = readJsonLines(path).filter((entry) => entry?.cwd);
+  const bad = new Set(entries.filter((entry) => entry.rating === 'bad').map((entry) => `${entry.cwd}\0${entry.question}`));
+  return entries.filter((entry) => !bad.has(`${entry.cwd}\0${entry.question}`));
+};
+
+const AVOID_EXAMPLES = 5;
+
+/** The latest questions rated bad in this project, for the prompt to steer away from. */
+export function recentBadQuestions({ cwd, path = defaultHistoryPath() }) {
+  const bad = readJsonLines(path).filter((entry) => entry?.cwd === cwd && entry.rating === 'bad' && typeof entry.question === 'string');
+  return [...new Set(bad.map((entry) => entry.question))].slice(-AVOID_EXAMPLES);
+}
 const isText = (value) => typeof value === 'string';
 
 /**

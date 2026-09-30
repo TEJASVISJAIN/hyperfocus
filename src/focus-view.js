@@ -46,8 +46,8 @@ export const INTRO_LINES = [
  * screen. State survives switching back to Claude, so an unanswered question is still there next time.
  *
  * Callbacks:
- * - `onAnswer({ question, chosen, correct, skipped })` for every answered or skipped question; a
- *   prediction is reported when Claude's next edit settles it
+ * - `onAnswer({ question, chosen, correct, skipped, rating? })` for every answered or skipped question; a
+ *   prediction is reported when Claude's next edit settles it; `b` reports `rating: 'bad'`, skipped
  * - `onFollowUp({ question, chosen, ask, thread })` when the user asks their own follow-up;
  *   answer with `setFollowUpAnswer` or `setFollowUpFailed`
  * - `onBack()` / `onKeepGoing()` for the choice offered by `showFinished`
@@ -312,6 +312,13 @@ export function createFocusView({
       }
       if (!question) return;
 
+      // A bad question: reported as skipped and rated, so it never counts, comes back or repeats.
+      if (key === 'b') {
+        if (!feedback) results.push('skip');
+        pendingPredictions = pendingPredictions.filter((pending) => pending.question !== question);
+        onAnswer({ question, chosen: null, correct: null, skipped: true, rating: 'bad' });
+        return next();
+      }
       if (feedback) {
         if (key === 'f' && followUp.pendingAsk === null) return void (followUp.draft = '');
         return next();
@@ -427,7 +434,7 @@ export function createFocusView({
       ];
     }
     if (followUp.draft !== null) return [['enter', 'ask'], ['esc', 'cancel']];
-    if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ...live, ...quiet, ...back];
+    if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ['b', 'bad question'], ...live, ...quiet, ...back];
     if (followUp.pendingAsk !== null) return [['any key', 'next question'], ...back];
     return [['f', 'ask a follow-up'], ['any key', 'next question'], ...live, ...back];
   }

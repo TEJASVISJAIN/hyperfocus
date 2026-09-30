@@ -218,3 +218,18 @@ test('z twice asks for no more quizzes this session; anything else in between ca
   assert.equal(quiet, 1);
   assert.match(screenText(view.render({ cols: 120, rows: 30 })), /▸ 1/, 'the key that cancels is not an answer');
 });
+
+test('b rates the question bad: unscored, reported, and the next question comes up', () => {
+  const { view, answers, render } = setup();
+  view.addQuestions([retryQuestion, attemptsQuestion, retryQuestion]);
+  assert.match(screenText(render(120)), /b\s+bad question/);
+  view.handleKey('b');
+  assert.deepEqual(answers, [{ question: retryQuestion, chosen: null, correct: null, skipped: true, rating: 'bad' }]);
+  assert.match(screenText(render()), /How many attempts\?/);
+  view.handleKey('2');
+  view.handleKey('b'); // after answering, while the explanation is shown
+  assert.equal(answers.length, 3);
+  assert.deepEqual(answers[2], { question: attemptsQuestion, chosen: null, correct: null, skipped: true, rating: 'bad' });
+  assert.match(screenText(render()), /Why retry refreshToken\?/);
+  assert.match(screenText(render()), /○● 1\/1/, 'the bad question shows as skipped');
+});
