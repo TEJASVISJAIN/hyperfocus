@@ -8,3 +8,4 @@ node_modules/
 demo/hyperfocus-demo.gif
 demo/hyperfocus-demo.mp4
 demo/hyperfocus-demo-poster.png
+*.vsix

@@ -29,11 +29,19 @@ file and the data files: within 1.x these only grow, so a change there must only
 
 ## Pull requests
 
+`main` is protected: every change, including the maintainer's, lands through a pull request that
+passes CI and is squash-merged. Fork the repository, branch from `main`, and open a pull request.
+
+CI runs on every pull request: the tests and typecheck on macOS and Linux with Node 22 and 24, the
+npm package installed and run the way users get it, and the VS Code extension's tests and package
+(downloadable from the run as `hyperfocus-vsix`). **CI passed** must be green to merge. Windows runs
+too, but is experimental and not required yet. A first-time contributor's run waits for a maintainer
+to approve it.
+
 - Keep each pull request to one change, with tests at the same level as the ones beside it. Tests
   check behaviour through public interfaces (a fake `claude` in `test/fixtures/`, a fake Ollama server),
   not internals.
 - Match the surrounding code: its naming, its comment density, plain ESM JavaScript with JSDoc types.
-- `npm test` and `npm run typecheck` must pass. CI runs them on macOS, Linux and Windows.
 - User-facing changes get a line in `CHANGELOG.md` under an `Unreleased` heading.
 
 Issues labelled [good first issue](https://github.com/TEJASVISJAIN/hyperfocus/labels/good%20first%20issue)
@@ -46,3 +54,10 @@ Run with `HYPERFOCUS_DEBUG=1` for a debug log if you can. Never paste a diff or 
 secrets; hyperfocus redacts what it recognises, but check before you post.
 
 Security problems go privately, not in an issue: see [SECURITY.md](SECURITY.md).
+
+## Releases
+
+The maintainer bumps the version in `package.json` and `CHANGELOG.md` in a pull request, then tags the
+merged commit `vX.Y.Z`. The release workflow checks the tag, the changelog and the tests, waits for
+approval, publishes to npm with provenance, and creates a GitHub Release with the changelog section
+and the VS Code extension package.
