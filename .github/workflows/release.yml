@@ -1,32 +1,80 @@
 name: Release
 
-# Push a tag like v0.1.0 (matching package.json) to publish that version to npm.
+# Push a tag like v1.0.1 (matching package.json) to release that version. Publishing waits for
+# approval on the "release" environment, then goes to npm with provenance and to a GitHub Release
+# carrying the changelog section and the VS Code extension package.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: read
-  id-token: write # lets npm record provenance: which commit and workflow built the package
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  check:
     runs-on: macos-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           cache: npm
-      - run: npm ci
-      - name: Check the tag matches package.json
+      - name: The tag matches package.json
         run: |
           version="$(node -p 'require("./package.json").version')"
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match package.json version $version" >&2
             exit 1
           fi
-      - run: npm publish --provenance --access public # prepublishOnly runs typecheck and tests
+      - name: The changelog has this version
+        run: grep -q "^## ${GITHUB_REF_NAME#v}\$" CHANGELOG.md || { echo "CHANGELOG.md has no '## ${GITHUB_REF_NAME#v}' section" >&2; exit 1; }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -- --test-timeout=60000
+
+  npm:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/@ddalus/hyperfocus
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing and provenance: which commit and workflow built the package
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # With a trusted publisher set up on npmjs.com no token is needed; NPM_TOKEN is the fallback.
+      - run: npm publish --provenance --access public --ignore-scripts # check already ran the tests
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  github-release:
+    needs: npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Package the VS Code extension
+        working-directory: vscode
+        run: npx --yes @vscode/vsce package --out "hyperfocus-vscode-$(node -p 'require("./package.json").version').vsix"
+      - name: Release notes from the changelog
+        run: awk -v v="## ${GITHUB_REF_NAME#v}" '$0 == v {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" vscode/*.vsix --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

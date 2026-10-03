@@ -4,18 +4,26 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+# A new push to a pull request replaces its run in progress; runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    # Windows support is experimental: its results are reported, but don't fail the build yet.
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -27,3 +35,67 @@ jobs:
       - run: npm run typecheck
       # A test that hangs fails after a minute, by name, instead of holding the job open.
       - run: npm test -- --test-timeout=60000
+
+  # Windows is experimental: it runs on every change but isn't required to merge (see #28, #34).
+  test-windows:
+    name: test (windows, experimental)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --test-timeout=60000
+
+  # What npm users get: pack the tarball, install it like a user would, and run it.
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm pack
+      - name: Install the tarball and run it
+        run: |
+          npm install -g ./ddalus-hyperfocus-*.tgz
+          export HYPERFOCUS_HOME="$RUNNER_TEMP/hf-home"
+          hyperfocus --stats
+          hyperfocus --notes </dev/null
+
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npx --yes @vscode/vsce package --out hyperfocus.vsix
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hyperfocus-vsix
+          path: vscode/hyperfocus.vsix
+          retention-days: 14
+
+  # The one check branch protection requires, so the matrix can change without touching the rules.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [test, package, extension]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every required job succeeded
+        run: |
+          echo '${{ toJSON(needs) }}'
+          [ "${{ needs.test.result }}" = success ] && [ "${{ needs.package.result }}" = success ] && [ "${{ needs.extension.result }}" = success ]
