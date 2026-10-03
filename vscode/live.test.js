@@ -79,7 +79,7 @@ test('the live card: what the agent is doing, the question and what is queued', 
 test('the live card after an answer marks yours and the right one, and shows why', () => {
   const answered = liveModel({ ...state, feedback: { chosen: 1, correct: false, answer: 0, why: 'The loop stops one short.', saved: false } });
   assert.deepEqual(answered.question.options.map((o) => o.mark), ['answer', 'chosen']);
-  assert.deepEqual(answered.feedback, { verdict: 'Not quite', tone: 'bad', why: 'The loop stops one short.' });
+  assert.deepEqual(answered.feedback, { verdict: 'Not quite', tone: 'bad', why: 'The loop stops one short.', saved: false });
   const right = liveModel({ ...state, feedback: { chosen: 0, correct: true, answer: 0, why: 'x', saved: false } });
   assert.deepEqual(right.question.options.map((o) => o.mark), ['answer', '']);
   assert.equal(right.feedback.verdict, 'Right');
@@ -91,7 +91,7 @@ test('the live card when the agent has finished, is waiting, or there is no ques
   const empty = liveModel({ ...state, question: null, queued: 0 });
   assert.equal(empty.question, null);
   assert.equal(empty.queued, '');
-  assert.equal(liveModel(state, { agentName: 'Codex' }).status.text, 'Codex is editing src/retry.js');
+  assert.equal(liveModel(state, { agent: 'codex' }).status.text, 'Codex is editing src/retry.js');
 });
 
 test('the status bar text', () => {
@@ -183,4 +183,147 @@ test('the connection comes back after the bridge restarts', async () => {
   } finally {
     live.dispose();
   }
+});
+
+// ── Controls, code locations, gutter marks, notebook, notifications, start ──
+const { anchorRange, controlsFor, finishedNow, gutterMarks, notebookTree, startCommand, findOnPath, resolveInside } = require('./panel-state');
+
+test('controls follow the same rules as the keys', () => {
+  assert.deepEqual(controlsFor(state), { answer: true, skip: true, rate: true, next: false, save: false, followUp: false, keepGoing: false, back: false, exit: true });
+  const answered = { ...state, feedback: { chosen: 0, correct: true, answer: 0, why: 'x', saved: false } };
+  assert.deepEqual(controlsFor(answered), { answer: false, skip: false, rate: true, next: true, save: true, followUp: true, keepGoing: false, back: false, exit: true });
+  assert.equal(controlsFor({ ...answered, feedback: { ...answered.feedback, saved: true } }).save, false);
+  assert.equal(controlsFor({ ...answered, thread: [{ ask: 'why?', answer: null }] }).followUp, false, 'one follow-up at a time');
+  const finished = { ...state, agent: { ...state.agent, finished: true } };
+  assert.deepEqual(controlsFor(finished), { answer: true, skip: true, rate: false, next: false, save: false, followUp: false, keepGoing: true, back: true, exit: false });
+  assert.deepEqual(Object.entries(controlsFor({ ...state, question: null })).filter(([, on]) => on).map(([name]) => name), ['exit'], 'back to the agent, like Esc, is always there');
+  assert.equal(liveModel(state, { agent: 'staged' }).controls.exit, false, 'a staged review has no agent');
+});
+
+test('the live card carries its controls, and a staged review is named as one', () => {
+  assert.equal(liveModel(state).controls.answer, true);
+  assert.equal(liveModel(state, { agent: 'staged' }).status.text, 'Reviewing your staged change');
+  assert.equal(liveModel({ ...state, question: null }, { agent: 'staged' }).status.text, 'Writing questions about your staged change…');
+  assert.equal(liveModel(state, { agent: 'staged' }).staged, true);
+  assert.equal(liveModel(state, { agent: 'codex' }).status.text, 'Codex is editing src/retry.js');
+});
+
+const FILE = ['import { sleep } from "./sleep.js";', '', 'export async function withRetry(fn) {', '  for (let attempts = 1; attempts < 3; attempts++) {', '    await sleep(base * 2 ** attempts);', '  }', '}'].join('\n');
+
+test('an anchor is found where its lines are now, even after the file moved around', () => {
+  const anchor = { file: 'src/retry.js', anchors: ['for (let attempts = 1; attempts < 3; attempts++) {', 'await sleep(base * 2 ** attempts);'] };
+  assert.deepEqual(anchorRange(anchor, FILE), { start: 3, end: 4 });
+  assert.deepEqual(anchorRange(anchor, '// a new header\n\n' + FILE), { start: 5, end: 6 });
+});
+
+test('an anchor that is mostly gone is not found, the same rule as hyperfocus uses', () => {
+  const anchor = { file: 'src/retry.js', anchors: ['for (let attempts = 1; attempts < 3; attempts++) {', 'await sleep(base * 2 ** attempts);', 'this line was reverted away', 'and so was this one'] };
+  assert.deepEqual(anchorRange(anchor, FILE), { start: 3, end: 4 }, 'half is enough');
+  assert.equal(anchorRange({ ...anchor, anchors: [...anchor.anchors, 'a fifth line gone too'] }, FILE), null);
+  assert.equal(anchorRange({ file: 'x', anchors: [] }, FILE), null);
+  assert.equal(anchorRange(null, FILE), null);
+});
+
+test('gutter marks: this file, this project, latest answer per question, nothing for skips, predictions or bad questions', () => {
+  const anchor = { file: 'src/retry.js', anchors: ['for (let attempts = 1; attempts < 3; attempts++) {'] };
+  const entry = (question, correct, extra = {}) => ({ ts: '2026-10-01T10:00:00Z', cwd: '/work/app', question, options: ['a', 'b'], answer: 0, chosen: correct ? 0 : 1, correct, anchor, ...extra });
+  const marks = gutterMarks(
+    [
+      entry('Which line drops the last retry?', false),
+      entry('Which line drops the last retry?', true, { ts: '2026-10-02T10:00:00Z' }),
+      entry('Elsewhere?', false, { cwd: '/work/other' }),
+      entry('Other file?', false, { anchor: { file: 'src/other.js', anchors: anchor.anchors } }),
+      entry('Skipped?', null, { chosen: null, skipped: true }),
+      entry('Bad?', false, { rating: 'bad' }),
+      entry('Gone?', false, { anchor: { file: 'src/retry.js', anchors: ['not in the file any more at all'] } }),
+    ],
+    { cwd: '/work/app', file: 'src/retry.js', text: FILE },
+  );
+  assert.deepEqual(marks.map((mark) => [mark.line, mark.correct, mark.question]), [[3, true, 'Which line drops the last retry?']]);
+  assert.match(marks[0].hover, /Which line drops the last retry\?/);
+  assert.match(marks[0].hover, /✅/);
+});
+
+test('the notebook tree: project, then tag, then question, newest project first', () => {
+  const saved = [
+    { ts: '2026-10-01T10:00:00Z', cwd: '/work/app', question: 'One?', tags: ['async', 'errors'] },
+    { ts: '2026-10-01T11:00:00Z', cwd: '/work/app', question: 'Two?', tags: ['async'] },
+    { ts: '2026-10-02T09:00:00Z', cwd: '/work/web', question: 'Three?' },
+  ];
+  const tree = notebookTree(saved);
+  assert.deepEqual(tree.map((project) => project.label), ['web', 'app']);
+  assert.deepEqual(tree[0].children.map((tag) => tag.label), ['untagged']);
+  assert.deepEqual(tree[1].children.map((tag) => [tag.label, tag.children.map((entry) => entry.label)]), [['async', ['Two?', 'One?']], ['errors', ['One?']]]);
+  assert.equal(tree[1].children[0].children[0].entry, saved[1]);
+});
+
+test('the "agent finished" notice fires once, on the change, and never while quiet or for a staged review', () => {
+  const busy = { ...state, agent: { ...state.agent, finished: false } };
+  const done = { ...state, agent: { ...state.agent, finished: true } };
+  assert.equal(finishedNow(busy, done), true);
+  assert.equal(finishedNow(done, done), false);
+  assert.equal(finishedNow(null, done), false, 'connecting to a session that had already finished is not news');
+  assert.equal(finishedNow(busy, { ...done, quiet: true }), false);
+  assert.equal(finishedNow(busy, { ...done, agent: { ...done.agent, activity: 'done' } }), true);
+  assert.equal(finishedNow(busy, { ...state, agent: { activity: 'done', busy: false, finished: false } }), true, 'the run ending is finishing too');
+  assert.equal(finishedNow(busy, done, { staged: true }), false);
+});
+
+test('the start command: hyperfocus if installed, else npx, plus the agent; a custom command is left alone', () => {
+  const base = { configured: 'npx @ddalus/hyperfocus', defaultCommand: 'npx @ddalus/hyperfocus' };
+  assert.equal(startCommand({ ...base, hyperfocusOnPath: true, agent: 'claude' }), 'hyperfocus');
+  assert.equal(startCommand({ ...base, hyperfocusOnPath: false, agent: 'claude' }), 'npx @ddalus/hyperfocus');
+  assert.equal(startCommand({ ...base, hyperfocusOnPath: true, agent: 'codex' }), 'hyperfocus codex');
+  assert.equal(startCommand({ ...base, configured: 'hf --no-auto', hyperfocusOnPath: true, agent: 'codex' }), 'hf --no-auto');
+  assert.equal(startCommand({ ...base, configured: 'hf codex', hyperfocusOnPath: true, extra: '--staged' }), 'hf codex --staged', 'a custom command still gets --staged');
+  assert.equal(startCommand({ ...base, hyperfocusOnPath: false, agent: 'gemini', extra: '--staged' }), 'npx @ddalus/hyperfocus gemini --staged');
+});
+
+test('finding programs on PATH, with Windows extensions', () => {
+  const files = new Set(['/usr/bin/claude', 'C:\\tools\\codex.cmd']);
+  const isFile = (path) => files.has(path);
+  assert.equal(findOnPath('claude', { env: { PATH: '/bin:/usr/bin' }, platform: 'darwin', isFile }), '/usr/bin/claude');
+  assert.equal(findOnPath('gemini', { env: { PATH: '/bin:/usr/bin' }, platform: 'darwin', isFile }), null);
+  assert.equal(findOnPath('codex', { env: { Path: 'C:\\x;C:\\tools', PATHEXT: '.EXE;.CMD' }, platform: 'win32', isFile }), 'C:\\tools\\codex.cmd');
+});
+
+test('the live card offers exactly the controls the state allows', () => {
+  const html = (s, opts) => liveHtml(liveModel(s, opts));
+  const asking = html(state);
+  assert.equal((asking.match(/data-act="answer"/g) ?? []).length, 2);
+  assert.match(asking, /data-act="skip"/);
+  assert.doesNotMatch(asking, /data-act="next"|data-act="save"|class="follow-up"/);
+
+  const answered = html({ ...state, feedback: { chosen: 1, correct: false, answer: 0, why: 'x', saved: false } });
+  assert.doesNotMatch(answered, /data-act="answer"/);
+  assert.match(answered, /data-act="next"/);
+  assert.match(answered, /data-act="save"/);
+  assert.match(answered, /class="follow-up"/);
+  assert.match(html({ ...state, feedback: { chosen: 1, correct: false, answer: 0, why: 'x', saved: true } }), /✓ saved/);
+
+  const finished = html({ ...state, agent: { ...state.agent, finished: true } });
+  assert.match(finished, /data-act="back"[^>]*>Back to the agent/);
+  assert.match(finished, /data-act="keepGoing"/);
+  assert.match(html(state, { agent: 'staged' }), />End review</, 'a staged review can be ended any time');
+  assert.match(asking, /data-open="question"/, 'the file opens the code');
+});
+
+test('a staged review is never adopted by a window for another folder', () => {
+  assert.equal(pickSession([session(9, '/elsewhere', undefined, { agent: 'staged' })], ['/work/app']), null);
+  assert.equal(pickSession([session(9, '/work/app', undefined, { agent: 'staged' })], ['/work/app']).pid, 9);
+});
+
+test('code is only opened inside the session folder', () => {
+  assert.equal(resolveInside('/work/app', 'src/retry.js'), '/work/app/src/retry.js');
+  assert.equal(resolveInside('/work/app', '/work/app/src/retry.js'), '/work/app/src/retry.js');
+  assert.equal(resolveInside('/work/app', '../../home/me/.ssh/id_rsa'), null);
+  assert.equal(resolveInside('/work/app', '/home/me/.ssh/id_rsa'), null);
+  assert.equal(resolveInside('/work/app', ''), null);
+  assert.equal(resolveInside(null, 'src/x.js'), null);
+});
+
+test('the dashboard copes with a history entry without a timestamp', () => {
+  const { render } = require('./views');
+  const data = { answered: 1, correct: 0, last30: { answered: 1, correct: 0 }, streak: 0, weakSpots: [], missed: [{ question: 'Q?', options: ['a'], answer: 0, chosen: 0, correct: false, ts: 12 }], saved: [] };
+  assert.match(render(data, { scope: 'project', project: 'x', nonce: 'n' }), /Q\?/);
 });

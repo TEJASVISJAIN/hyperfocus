@@ -1,8 +1,8 @@
 {
   "name": "hyperfocus",
   "displayName": "hyperfocus — learn while your AI codes",
-  "description": "See your hyperfocus quiz stats, weak spots and saved questions next to your code. For Claude Code, Codex and Gemini CLI.",
-  "version": "0.1.0",
+  "description": "Answer quiz questions about your AI agent's change right in VS Code: live questions, jump to the code, gutter marks, a notebook, and a review of your staged diff. For Claude Code, Codex and Gemini CLI.",
+  "version": "0.2.0",
   "publisher": "ddalus",
   "license": "MIT",
   "engines": {
@@ -14,7 +14,9 @@
     "Other"
   ],
   "main": "./extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -31,30 +33,82 @@
           "type": "webview",
           "id": "hyperfocus.panel",
           "name": "Learning"
+        },
+        {
+          "id": "hyperfocus.notebook",
+          "name": "Notebook"
         }
       ]
     },
     "commands": [
       {
         "command": "hyperfocus.start",
-        "title": "hyperfocus: Start in a terminal"
+        "title": "Start hyperfocus",
+        "category": "hyperfocus",
+        "icon": "$(play)"
+      },
+      {
+        "command": "hyperfocus.reviewStaged",
+        "title": "Review staged changes",
+        "category": "hyperfocus",
+        "icon": "$(mortar-board)"
       },
       {
         "command": "hyperfocus.openNotebook",
-        "title": "hyperfocus: Open saved questions"
+        "title": "Open the notebook as Markdown",
+        "category": "hyperfocus",
+        "icon": "$(book)"
       },
       {
         "command": "hyperfocus.refresh",
-        "title": "hyperfocus: Refresh",
+        "title": "Refresh",
+        "category": "hyperfocus",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "hyperfocus.statusClick",
+        "title": "Show the panel or start",
+        "category": "hyperfocus"
+      },
+      {
+        "command": "hyperfocus.openSaved",
+        "title": "Open saved question",
+        "category": "hyperfocus"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "hyperfocus.start",
+          "when": "view == hyperfocus.panel",
+          "group": "navigation@1"
+        },
+        {
           "command": "hyperfocus.refresh",
           "when": "view == hyperfocus.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "hyperfocus.openNotebook",
+          "when": "view == hyperfocus.notebook",
           "group": "navigation"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "hyperfocus.reviewStaged",
+          "when": "scmProvider == git",
+          "group": "navigation@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "hyperfocus.statusClick",
+          "when": "false"
+        },
+        {
+          "command": "hyperfocus.openSaved",
+          "when": "false"
         }
       ]
     },
@@ -64,15 +118,103 @@
         "hyperfocus.command": {
           "type": "string",
           "default": "npx @ddalus/hyperfocus",
-          "description": "How to start hyperfocus in the terminal, for example `hyperfocus` or `hyperfocus codex`."
+          "description": "How to start hyperfocus. Leave it as it is and the extension uses `hyperfocus` when it is installed, else npx, plus the agent you picked. Anything else is run exactly as written."
         },
         "hyperfocus.home": {
           "type": "string",
           "default": "",
           "description": "Where hyperfocus keeps its data. Empty means ~/.hyperfocus (or HYPERFOCUS_HOME)."
+        },
+        "hyperfocus.agent": {
+          "type": "string",
+          "enum": [
+            "",
+            "claude",
+            "codex",
+            "gemini"
+          ],
+          "enumDescriptions": [
+            "Ask when more than one is installed",
+            "Claude Code",
+            "Codex CLI",
+            "Gemini CLI"
+          ],
+          "default": "",
+          "description": "The coding agent hyperfocus wraps when started from VS Code."
+        },
+        "hyperfocus.notifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when the agent finishes, unless hyperfocus is quiet."
+        },
+        "hyperfocus.gutterMarks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mark lines you were quizzed on in the editor gutter: green right, red wrong. Hover for the question."
         }
       }
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "hyperfocus.notebook",
+        "contents": "Nothing saved yet. Press w in hyperfocus, or Save to notebook in the panel, after answering a question."
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "hyperfocus.welcome",
+        "title": "Learn while your AI codes",
+        "description": "Set up hyperfocus and answer your first question about your agent's change.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Get hyperfocus",
+            "description": "A small CLI around your coding agent.\n[Check again](command:hyperfocus.refresh)",
+            "media": {
+              "markdown": "media/walkthrough/install.md"
+            },
+            "completionEvents": [
+              "onContext:hyperfocus.cliFound"
+            ]
+          },
+          {
+            "id": "start",
+            "title": "Start a session",
+            "description": "Run your agent inside hyperfocus in this folder.\n[Start hyperfocus](command:hyperfocus.start)",
+            "media": {
+              "markdown": "media/walkthrough/start.md"
+            },
+            "completionEvents": [
+              "onCommand:hyperfocus.start",
+              "onContext:hyperfocus.sessionSeen"
+            ]
+          },
+          {
+            "id": "answer",
+            "title": "Answer a question",
+            "description": "Answer in the Live card in the sidebar.\n[Open the panel](command:hyperfocus.panel.focus)",
+            "media": {
+              "markdown": "media/walkthrough/answer.md"
+            },
+            "completionEvents": [
+              "onContext:hyperfocus.answered"
+            ]
+          },
+          {
+            "id": "notebook",
+            "title": "Your notebook",
+            "description": "Saved questions, gutter marks and reviewing your own staged change.\n[Open the notebook](command:hyperfocus.openNotebook)",
+            "media": {
+              "markdown": "media/walkthrough/notebook.md"
+            },
+            "completionEvents": [
+              "onCommand:hyperfocus.openNotebook",
+              "onView:hyperfocus.notebook"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "repository": {
     "type": "git",
