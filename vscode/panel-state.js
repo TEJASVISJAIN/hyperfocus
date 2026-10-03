@@ -1,7 +1,7 @@
 // What the live panel shows, worked out from hyperfocus's session files and bridge messages.
 // Kept free of the vscode module so it can be tested with plain node.
 const { readdirSync, readFileSync, statSync } = require('node:fs');
-const { basename, join, relative, isAbsolute, posix, win32 } = require('node:path');
+const { join, relative, isAbsolute, posix, win32 } = require('node:path');
 
 /** The bridge protocol this extension speaks (hyperfocus's src/bridge.js BRIDGE_PROTOCOL). */
 const PROTOCOL = 1;
@@ -112,6 +112,7 @@ function liveModel(state, { agent: agentId = 'claude' } = {}) {
     question: question
       ? {
           id: question.id,
+          kind: question.kind ?? 'why',
           heading: `Question ${question.number}${kind ? ' · ' + kind : ''}`,
           q: question.q,
           code: question.code ?? '',
@@ -184,28 +185,6 @@ function gutterMarks(entries, { cwd, file, text }) {
   return marks.sort((a, b) => a.line - b.line);
 }
 
-/** Saved questions as project → tag → question, newest project first, newest question first. */
-function notebookTree(saved) {
-  const projects = new Map();
-  for (const entry of saved) {
-    if (typeof entry?.question !== 'string') continue;
-    const project = projects.get(entry.cwd) ?? { label: basename(entry.cwd ?? '') || String(entry.cwd), cwd: entry.cwd, latest: '', tags: new Map() };
-    project.latest = String(entry.ts) > project.latest ? String(entry.ts) : project.latest;
-    for (const tag of entry.tags?.length ? entry.tags : ['untagged']) project.tags.set(tag, [...(project.tags.get(tag) ?? []), entry]);
-    projects.set(entry.cwd, project);
-  }
-  return [...projects.values()]
-    .sort((a, b) => b.latest.localeCompare(a.latest))
-    .map((project) => ({
-      label: project.label,
-      cwd: project.cwd,
-      children: [...project.tags.entries()].map(([tag, entries]) => ({
-        label: tag,
-        children: [...entries].reverse().map((entry) => ({ label: entry.question, entry })),
-      })),
-    }));
-}
-
 const isFileOnDisk = (path) => {
   try {
     return statSync(path).isFile();
@@ -272,7 +251,6 @@ module.exports = {
   finishedNow,
   anchorRange,
   gutterMarks,
-  notebookTree,
   findOnPath,
   startCommand,
 };

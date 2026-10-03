@@ -4,9 +4,9 @@ const { randomBytes } = require('node:crypto');
 const { existsSync, mkdirSync, watch, writeFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
 const { dataDir, readJsonLines, summarize } = require('./data');
-const { render, dashboardHtml, liveSection, pinnedHtml } = require('./views');
+const { render, dashboardHtml, liveSection } = require('./views');
 const { LiveConnection } = require('./live');
-const { agentName, anchorRange, finishedNow, findOnPath, gutterMarks, liveModel, notebookTree, resolveInside, startCommand, statusBarText } = require('./panel-state');
+const { agentName, anchorRange, finishedNow, findOnPath, gutterMarks, liveModel, resolveInside, startCommand, statusBarText } = require('./panel-state');
 
 const DEFAULT_COMMAND = 'npx @ddalus/hyperfocus';
 const AGENTS = [
@@ -19,16 +19,14 @@ const settings = () => vscode.workspace.getConfiguration('hyperfocus');
 const workspaceRoot = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
 
 /**
- * The hyperfocus sidebar: the live question while a session runs in this folder (answerable here),
- * a saved question picked in the notebook, then stats, weak spots and saved questions.
+ * The hyperfocus sidebar. Idle: what hyperfocus is and a start button. While a session runs here:
+ * the question to answer. Under either, your history once there is some.
  */
 class Panel {
   constructor({ home, live, openCode }) {
     Object.assign(this, { home, live, openCode });
     this.view = null;
-    this.scope = 'project';
-    this.pinned = null;
-    this.sent = { live: '', pinned: '', dashboard: '' };
+    this.sent = { live: '', dashboard: '' };
   }
 
   liveHtml() {
@@ -38,16 +36,26 @@ class Panel {
   }
 
   dashboard() {
-    const cwd = this.scope === 'project' ? workspaceRoot() : null;
-    const data = summarize({ home: this.home(), cwd });
-    return { data, options: { scope: this.scope, project: cwd ? cwd.split(/[\\/]/).pop() : 'all projects', running: this.live.snapshot().status !== 'none' } };
+    const cwd = workspaceRoot();
+    const data = { ...summarize({ home: this.home(), cwd }), project: cwd ? cwd.split(/[\\/]/).pop() : 'all projects' };
+    const agent = AGENTS.find((candidate) => candidate.id === pickAgent()) ?? AGENTS[0];
+    return { data, options: { running: this.live.snapshot().status !== 'none', startLabel: `Start ${agent.label} with hyperfocus` } };
   }
 
   resolveWebviewView(view) {
     this.view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [] };
     view.webview.onDidReceiveMessage((message) => this.receive(message));
-    view.onDidChangeVisibility(() => view.visible && this.refresh());
+    // While the panel is on screen the session asks its questions here, not in the terminal.
+    this.live.setWatching(view.visible);
+    view.onDidChangeVisibility(() => {
+      this.live.setWatching(view.visible);
+      if (view.visible) this.refresh();
+    });
+    view.onDidDispose(() => {
+      this.live.setWatching(false);
+      this.view = null;
+    });
     this.refresh();
   }
 
@@ -57,49 +65,37 @@ class Panel {
         return vscode.commands.executeCommand('hyperfocus.start');
       case 'notebook':
         return vscode.commands.executeCommand('hyperfocus.openNotebook');
-      case 'scope':
-        this.scope = message.scope === 'all' ? 'all' : 'project';
-        return this.update('dashboard');
-      case 'unpin':
-        return this.pin(null);
       case 'act':
-        return this.act(message.action);
-      case 'open':
-        return this.openFromPanel(message.which);
+        if (message.action && typeof message.action.type === 'string' && !this.live.send(message.action)) {
+          vscode.window.showWarningMessage('hyperfocus is no longer running in this folder.');
+        }
+        return;
+      case 'open': {
+        const { session, state } = this.live.snapshot();
+        const question = state?.question;
+        if (question && session) return this.openCode({ cwd: session.cwd, anchor: question.anchor, file: question.file });
+        return;
+      }
+      case 'openSaved': {
+        const entry = this.dashboard().data.saved[message.index];
+        if (entry) return this.openCode({ cwd: entry.cwd, anchor: entry.anchor, file: entry.file });
+      }
     }
-  }
-
-  act(action) {
-    if (!action || typeof action.type !== 'string') return;
-    if (!this.live.send(action)) vscode.window.showWarningMessage('hyperfocus is no longer running in this folder.');
-  }
-
-  openFromPanel(which) {
-    if (which === 'pinned' && this.pinned) return this.openCode({ cwd: this.pinned.cwd, anchor: this.pinned.anchor, file: this.pinned.file });
-    const { session, state } = this.live.snapshot();
-    const question = state?.question;
-    if (question && session) return this.openCode({ cwd: session.cwd, anchor: question.anchor, file: question.file });
-  }
-
-  pin(entry) {
-    this.pinned = entry;
-    this.update('pinned');
   }
 
   /** Re-renders the whole panel; used when it is first shown or comes back into view. */
   refresh() {
     if (!this.view) return;
     const { data, options } = this.dashboard();
-    this.sent = { live: this.liveHtml(), pinned: pinnedHtml(this.pinned), dashboard: dashboardHtml(data, options) };
-    this.view.webview.html = render(data, { ...options, nonce: randomBytes(16).toString('base64'), live: this.sent.live, pinned: this.pinned });
+    this.sent = { live: this.liveHtml(), dashboard: dashboardHtml(data, options) };
+    this.view.webview.html = render(data, { ...options, nonce: randomBytes(16).toString('base64'), live: this.sent.live });
   }
 
-  /** Replaces one part in place, so the others keep their scroll, open sections and typed text. */
+  /** Replaces one part in place, so the other keeps its scroll, open sections and typed text. */
   update(part) {
     if (!this.view) return;
     let html;
     if (part === 'live') html = this.liveHtml();
-    else if (part === 'pinned') html = pinnedHtml(this.pinned);
     else {
       const { data, options } = this.dashboard();
       html = dashboardHtml(data, options);
@@ -202,63 +198,11 @@ function gutter(context, home) {
   };
 }
 
-/** The notebook as a tree: project → tag → saved question. */
-class NotebookTree {
-  constructor(home) {
-    this.home = home;
-    this.changed = new vscode.EventEmitter();
-    this.onDidChangeTreeData = this.changed.event;
-  }
-
-  refresh() {
-    this.changed.fire(undefined);
-  }
-
-  getChildren(node) {
-    if (node) return node.children ?? [];
-    return notebookTree(readJsonLines(join(this.home(), 'saved.jsonl')));
-  }
-
-  getTreeItem(node) {
-    if (node.entry) {
-      const { entry } = node;
-      const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
-      const result = entry.correct === true ? 'right' : entry.correct === false ? 'wrong' : 'waiting';
-      item.description = [result, entry.file].filter(Boolean).join(' · ');
-      item.tooltip = new vscode.MarkdownString([`**${entry.question}**`, '', entry.why ?? ''].join('\n'));
-      item.iconPath = new vscode.ThemeIcon(entry.correct === true ? 'pass' : entry.correct === false ? 'error' : 'circle-outline');
-      item.command = { command: 'hyperfocus.openSaved', title: 'Open', arguments: [entry] };
-      return item;
-    }
-    const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
-    item.iconPath = new vscode.ThemeIcon(node.cwd !== undefined ? 'folder' : 'tag');
-    item.description = node.cwd !== undefined ? '' : String(node.children.length);
-    return item;
-  }
-}
-
-/** Which agent to run: the remembered one, the only one installed, or the user's pick. */
-async function chooseAgent() {
-  const installed = AGENTS.filter((agent) => findOnPath(agent.binary));
-  const remembered = settings().get('agent');
-  if (remembered && installed.some((agent) => agent.id === remembered)) return remembered;
-  if (installed.length === 1) return installed[0].id;
-  if (installed.length === 0) {
-    const choice = await vscode.window.showWarningMessage(
-      'hyperfocus wraps a coding agent, and none was found on your PATH (claude, codex or gemini).',
-      'Install Claude Code',
-      'Start anyway',
-    );
-    if (choice === 'Install Claude Code') vscode.env.openExternal(vscode.Uri.parse('https://claude.com/claude-code'));
-    return choice === 'Start anyway' ? 'claude' : null;
-  }
-  const picked = await vscode.window.showQuickPick(
-    installed.map((agent) => ({ label: agent.label, description: agent.binary, id: agent.id })),
-    { title: 'Which agent should hyperfocus wrap?', placeHolder: 'Remembered for next time (setting: hyperfocus.agent)' },
-  );
-  if (!picked) return null;
-  await settings().update('agent', picked.id, vscode.ConfigurationTarget.Global);
-  return picked.id;
+/** The agent to run: the one set in settings, else the first installed of Claude, Codex, Gemini. */
+function pickAgent() {
+  const configured = settings().get('agent');
+  if (configured) return configured;
+  return AGENTS.find((agent) => findOnPath(agent.binary))?.id ?? null;
 }
 
 const hyperfocusCommand = (agent, extra = '') =>
@@ -274,7 +218,6 @@ function activate(context) {
   });
   const panel = new Panel({ home, live, openCode: opener.open });
   const marks = gutter(context, home);
-  const tree = new NotebookTree(home);
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'hyperfocus.statusClick';
@@ -317,31 +260,21 @@ function activate(context) {
     opener,
     status,
     vscode.window.registerWebviewViewProvider('hyperfocus.panel', panel),
-    vscode.window.registerTreeDataProvider('hyperfocus.notebook', tree),
     vscode.commands.registerCommand('hyperfocus.refresh', () => {
       panel.refresh();
-      tree.refresh();
       marks.historyChanged();
     }),
     vscode.commands.registerCommand('hyperfocus.start', async () => {
-      const agent = await chooseAgent();
-      if (!agent) return;
-      // Not installed: offer to install it once, or carry on with npx (slower to start each time).
-      let install = false;
-      if (!findOnPath('hyperfocus') && settings().get('command') === DEFAULT_COMMAND && !context.globalState.get('offeredInstall')) {
-        const choice = await vscode.window.showInformationMessage(
-          "hyperfocus isn't installed. Install it now (npm i -g @ddalus/hyperfocus), or run it with npx each time?",
-          'Install',
-          'Use npx',
-        );
-        if (!choice) return;
-        await context.globalState.update('offeredInstall', true);
-        install = choice === 'Install';
+      const agent = pickAgent();
+      if (!agent) {
+        const choice = await vscode.window.showWarningMessage('hyperfocus runs alongside a coding agent, and none is installed: Claude Code, Codex CLI or Gemini CLI.', 'Get Claude Code');
+        if (choice) vscode.env.openExternal(vscode.Uri.parse('https://claude.com/claude-code'));
+        return;
       }
       const terminal = vscode.window.createTerminal({ name: 'hyperfocus', cwd: workspaceRoot() ?? undefined });
       terminal.show();
-      if (install) terminal.sendText('npm install -g @ddalus/hyperfocus && hyperfocus' + (agent === 'claude' ? '' : ' ' + agent));
-      else terminal.sendText(hyperfocusCommand(agent));
+      terminal.sendText(hyperfocusCommand(agent));
+      await focusPanel();
     }),
     vscode.commands.registerCommand('hyperfocus.statusClick', () => (live.snapshot().status === 'none' ? vscode.commands.executeCommand('hyperfocus.start') : focusPanel())),
     vscode.commands.registerCommand('hyperfocus.openNotebook', async () => {
@@ -352,12 +285,6 @@ function activate(context) {
       }
       await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.file(path));
     }),
-    vscode.commands.registerCommand('hyperfocus.openSaved', async (entry) => {
-      if (!entry) return;
-      panel.pin(entry);
-      await focusPanel();
-      if (entry.anchor || entry.file) await opener.open({ cwd: entry.cwd, anchor: entry.anchor, file: entry.file });
-    }),
     vscode.commands.registerCommand('hyperfocus.reviewStaged', async () => {
       const cwd = workspaceRoot();
       if (!cwd) return vscode.window.showInformationMessage('hyperfocus: open a folder first.');
@@ -365,7 +292,7 @@ function activate(context) {
       // `git diff --cached --quiet` exits 0 when nothing is staged.
       const nothingStaged = await new Promise((resolve) => execFile('git', ['diff', '--cached', '--quiet'], { cwd }, (error) => resolve(!error)));
       if (nothingStaged) return vscode.window.showInformationMessage('hyperfocus: nothing is staged. Stage a change, then review it before committing.');
-      const agent = settings().get('agent') || AGENTS.find((candidate) => findOnPath(candidate.binary))?.id || 'claude';
+      const agent = pickAgent() ?? 'claude';
       let output = '';
       const child = spawn(hyperfocusCommand(agent, '--staged'), { cwd, shell: true, env: process.env });
       staged = child;
@@ -383,7 +310,7 @@ function activate(context) {
     { dispose: () => staged?.kill() },
   );
 
-  // hyperfocus appends to these files as you answer; the panel, tree and gutter follow along.
+  // hyperfocus appends to these files as you answer; the panel and the gutter follow along.
   let timer = null;
   const changed = new Set();
   const later = (file) => {
@@ -394,7 +321,6 @@ function activate(context) {
         marks.historyChanged();
         setContexts();
       }
-      if (changed.has('saved.jsonl')) tree.refresh();
       panel.update('dashboard');
       changed.clear();
     }, 300);

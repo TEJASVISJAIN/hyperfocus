@@ -61,6 +61,7 @@ export async function runFocus(agentPath, agentArgs, options) {
   let quiet = Boolean(config.quiet);
   /** @type {Awaited<ReturnType<typeof startBridge>> | null} */
   let bridge = null;
+  const panelFollowing = () => (bridge?.watcherCount ?? 0) > 0;
   // The terminal and any connected panel both show the session, so both hear about every change.
   const redraw = () => {
     screen.redrawFocus();
@@ -78,6 +79,8 @@ export async function runFocus(agentPath, agentArgs, options) {
     onSave: (entry, run) => saveQuestion(entry, { cwd, files: changedFiles(run) }),
     onBack: () => {
       session.view.hideFinished();
+      // Chosen in the VS Code panel while the terminal shows the agent: nothing to hand back.
+      if (screen.view === 'claude') return redraw();
       showRecapOrClaude('done');
     },
     onExit: () => leaveFocus(),
@@ -182,7 +185,10 @@ export async function runFocus(agentPath, agentArgs, options) {
     switchOn: config.switchOn,
     shortRuns: isShortRunProject(cwd, config.delayMs),
     currentView: () => screen.view,
-    openFocus,
+    // While the VS Code panel follows the session, the quiz is there: the terminal stays on the agent.
+    openFocus: () => {
+      if (!panelFollowing()) openFocus();
+    },
     returnToClaude: handBack,
   });
 
@@ -193,6 +199,12 @@ export async function runFocus(agentPath, agentArgs, options) {
     session.agentEvent(event);
     if (event.type === 'done') logRun();
     policy.agentEvent(event);
+    // The panel offers "keep going" when the agent finishes mid-question; the terminal stays put, and
+    // the panel's own notification replaces the bell.
+    if (event.type === 'done' && panelFollowing() && screen.view === 'claude' && session.view.isAtQuestion) {
+      session.view.showFinished({ reason: 'done', changedFiles: changedFiles(session.run), score: session.view.score });
+      redraw();
+    }
   });
 
   // Keeps the elapsed time on the status line moving.

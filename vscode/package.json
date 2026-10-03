@@ -1,7 +1,7 @@
 {
   "name": "hyperfocus",
   "displayName": "hyperfocus — learn while your AI codes",
-  "description": "Answer quiz questions about your AI agent's change right in VS Code: live questions, jump to the code, gutter marks, a notebook, and a review of your staged diff. For Claude Code, Codex and Gemini CLI.",
+  "description": "Answer short questions about your AI agent's change right in VS Code while it works: jump to the code, gutter marks, saved questions, and a review of your staged diff. For Claude Code, Codex and Gemini CLI.",
   "version": "0.2.0",
   "publisher": "ddalus",
   "license": "MIT",
@@ -32,11 +32,7 @@
         {
           "type": "webview",
           "id": "hyperfocus.panel",
-          "name": "Learning"
-        },
-        {
-          "id": "hyperfocus.notebook",
-          "name": "Notebook"
+          "name": "Questions"
         }
       ]
     },
@@ -69,11 +65,6 @@
         "command": "hyperfocus.statusClick",
         "title": "Show the panel or start",
         "category": "hyperfocus"
-      },
-      {
-        "command": "hyperfocus.openSaved",
-        "title": "Open saved question",
-        "category": "hyperfocus"
       }
     ],
     "menus": {
@@ -87,11 +78,6 @@
           "command": "hyperfocus.refresh",
           "when": "view == hyperfocus.panel",
           "group": "navigation@2"
-        },
-        {
-          "command": "hyperfocus.openNotebook",
-          "when": "view == hyperfocus.notebook",
-          "group": "navigation"
         }
       ],
       "scm/title": [
@@ -104,10 +90,6 @@
       "commandPalette": [
         {
           "command": "hyperfocus.statusClick",
-          "when": "false"
-        },
-        {
-          "command": "hyperfocus.openSaved",
           "when": "false"
         }
       ]
@@ -134,7 +116,7 @@
             "gemini"
           ],
           "enumDescriptions": [
-            "Ask when more than one is installed",
+            "The first one installed: Claude Code, then Codex, then Gemini",
             "Claude Code",
             "Codex CLI",
             "Gemini CLI"
@@ -154,12 +136,6 @@
         }
       }
     },
-    "viewsWelcome": [
-      {
-        "view": "hyperfocus.notebook",
-        "contents": "Nothing saved yet. Press w in hyperfocus, or Save to notebook in the panel, after answering a question."
-      }
-    ],
     "walkthroughs": [
       {
         "id": "hyperfocus.welcome",
@@ -192,7 +168,7 @@
           {
             "id": "answer",
             "title": "Answer a question",
-            "description": "Answer in the Live card in the sidebar.\n[Open the panel](command:hyperfocus.panel.focus)",
+            "description": "Answer in the hyperfocus sidebar while your agent works.\n[Open the panel](command:hyperfocus.panel.focus)",
             "media": {
               "markdown": "media/walkthrough/answer.md"
             },
@@ -201,15 +177,15 @@
             ]
           },
           {
-            "id": "notebook",
-            "title": "Your notebook",
-            "description": "Saved questions, gutter marks and reviewing your own staged change.\n[Open the notebook](command:hyperfocus.openNotebook)",
+            "id": "more",
+            "title": "Saved questions and reviews",
+            "description": "Saved questions, gutter marks, and reviewing your own staged change.\n[Open saved questions](command:hyperfocus.openNotebook)",
             "media": {
               "markdown": "media/walkthrough/notebook.md"
             },
             "completionEvents": [
               "onCommand:hyperfocus.openNotebook",
-              "onView:hyperfocus.notebook"
+              "onCommand:hyperfocus.reviewStaged"
             ]
           }
         ]

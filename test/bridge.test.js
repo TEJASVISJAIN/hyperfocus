@@ -272,6 +272,26 @@ test('the socket lives in a directory only this user can enter', async () => {
   assert.equal(statSync(dirname(bridge.socketPath)).mode & 0o777, 0o700);
 });
 
+test('the bridge knows whether a panel is on screen', async () => {
+  const { session, bridge } = await setup();
+  session.view.addQuestions([bugQuestion]);
+  const panel = await client(bridge.socketPath);
+  await panel.next(isState);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(bridge.watcherCount, 0, 'connected is not the same as on screen');
+  panel.send({ type: 'watching', visible: true });
+  await settle();
+  assert.equal(bridge.watcherCount, 1);
+  panel.send({ type: 'watching', visible: false });
+  await settle();
+  assert.equal(bridge.watcherCount, 0);
+  panel.send({ type: 'watching', visible: true });
+  await settle();
+  panel.socket.destroy();
+  await settle();
+  assert.equal(bridge.watcherCount, 0, 'a panel that goes away stops watching');
+});
+
 test('junk from a client is ignored and the session carries on', async () => {
   const { session, bridge } = await setup();
   session.view.addQuestions([bugQuestion]);

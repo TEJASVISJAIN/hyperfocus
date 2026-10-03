@@ -5,8 +5,8 @@
 - **Answer in VS Code:** a running session can now be followed and driven by the VS Code extension
   (0.2.0). Each session writes `~/.hyperfocus/sessions/<pid>.json` and listens on a local socket (a
   named pipe on Windows) that only your user can open. Answers, follow-ups, saves and ratings from the
-  panel work exactly like the keys, and the terminal shows them too. The terminal is otherwise
-  unchanged.
+  panel work exactly like the keys, and the terminal shows them too. While the panel is on screen,
+  the terminal stays on your agent and the questions go to the panel; with it closed, nothing changes.
 - **`--staged`:** questions about your staged change (`git diff --cached`), with no agent running.
   The VS Code panel asks them; the extension's "Review staged changes" button starts it. Answers count
   in `--stats` like any other.

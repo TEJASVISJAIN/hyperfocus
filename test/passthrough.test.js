@@ -368,6 +368,34 @@ test('a panel finds the running session by its file and answers the question on 
   assert.ok(!existsSync(join(home, 'sessions', `${session.pid}.json`)), 'the session file goes with the session');
 });
 
+test('while a VS Code panel is on screen, the terminal stays on the agent and the panel gets the question', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus([], { home, env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  let [session] = listSessions(join(home, 'sessions'));
+  for (let waited = 0; !session && waited < 3000; waited += 50) {
+    await pause(50);
+    [session] = listSessions(join(home, 'sessions'));
+  }
+  const socket = connect(session.endpoint);
+  let received = '';
+  socket.setEncoding('utf8');
+  socket.on('data', (chunk) => (received += chunk));
+  socket.write(JSON.stringify({ type: 'watching', visible: true }) + '\n');
+  await pause(100);
+
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
+  for (let waited = 0; !/Why retry refreshToken/.test(received) && waited < 8000; waited += 100) await pause(100);
+  assert.match(received, /Why retry refreshToken/, 'the panel has the question');
+  await pause(2500); // past the delay and the typing grace
+  assert.equal((await focus.userScreen()).type, 'normal', 'the terminal never left the agent');
+
+  socket.destroy();
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
 test('the first time the quiz opens, an intro explains the keys, once', async () => {
   const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
   const focus = startFocus([], { home, firstRun: true, env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });

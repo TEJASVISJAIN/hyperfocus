@@ -511,6 +511,10 @@ sequenceDiagram
   through `focus-view` `act()`, which shares its code with the keys and follows the same rules (for
   example, only answering, skipping, keep going and back work while "agent finished" is up). An
   action naming a question id that is no longer up gets `{ type: 'stale', id }`.
+- **Who asks.** A client sends `{ type: 'watching', visible }` whenever its panel is shown or hidden.
+  While any panel is on screen, the automatic switch to the quiz is skipped: the terminal stays on the
+  agent and the panel asks. When the agent finishes mid-question, the "finished" choice is set for the
+  panel, without the terminal bell. `Ctrl-]` still opens the quiz in the terminal.
 - **Versioning.** `protocol` is in the session file and the hello; a client that doesn't know the
   number says which hyperfocus it needs instead of guessing.
 
@@ -531,8 +535,8 @@ tested with node:
 | Module | Responsibility |
 | --- | --- |
 | `live.js` | finds the session for the window (session files, polled), connects with backoff, refuses unknown protocols, keeps the latest state |
-| `panel-state.js` | session choice; state → live card and controls (the same rules as the keys); status bar text; the "agent finished" edge; anchor → line range (the half-the-lines rule); gutter marks from history; the notebook tree; the start command and PATH lookup |
-| `views.js` | the webview HTML: live card, pinned notebook card and dashboard, each replaced in place by message so scroll, open sections and a half-typed follow-up survive |
+| `panel-state.js` | session choice; state → live card and controls (the same rules as the keys); status bar text; the "agent finished" edge; anchor → line range (the half-the-lines rule); gutter marks from history; the start command and PATH lookup |
+| `views.js` | the webview HTML in three states (idle: what it is and Start; working: the question; your progress underneath once there is some), the live card and the rest replaced in place by message so scroll, open sections and a half-typed follow-up survive |
 | `data.js` | stats, weak spots, missed and saved questions from the JSONL files |
 | `extension.js` | VS Code wiring only: webview, tree, status bar, decorations, commands, watchers |
 

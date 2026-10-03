@@ -22,6 +22,13 @@ class LiveConnection extends EventEmitter {
     this.retryAt = 0;
     this.refused = null; // endpoint of a session whose protocol we don't speak
     this.timer = null;
+    this.watching = false; // whether the panel is on screen; the session leaves the quiz to it then
+  }
+
+  /** Tells the session whether the panel is on screen, now and after every reconnect. */
+  setWatching(visible) {
+    this.watching = Boolean(visible);
+    if (this.status === 'live' && this.socket) this.socket.write(JSON.stringify({ type: 'watching', visible: this.watching }) + '\n');
   }
 
   start() {
@@ -114,7 +121,8 @@ class LiveConnection extends EventEmitter {
       }
       this.failures = 0;
       this.retryAt = 0;
-      return this.set({ status: 'live', hello: message });
+      this.set({ status: 'live', hello: message });
+      return this.setWatching(this.watching);
     }
     if (message.type === 'state' && this.status === 'live') {
       const { type, ...state } = message;

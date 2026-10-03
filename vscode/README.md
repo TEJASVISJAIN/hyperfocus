@@ -10,26 +10,24 @@ behaviour, why this approach. This extension puts those questions in your editor
 
 ## What you get
 
-- **Answer in the sidebar.** While hyperfocus runs in this folder (in VS Code's terminal or any
-  other), the **Live** card shows what the agent is doing and the question you're being asked. Click
-  an option or press `1`–`9`. You get the answer and the reasoning straight away.
-- **Follow up, save, rate.** Ask a follow-up question about the answer, save it to your notebook, or
-  mark it a bad question so it never counts. The terminal stays in step with the panel.
+- **Questions in the sidebar while your agent works.** Click an answer or press `1`–`9`. You see
+  right away whether you were right, and why. The terminal stays on your agent; if the sidebar is
+  closed, hyperfocus asks there instead.
+- **Next, Save, or ask a follow-up** about the answer. Skip or flag a bad question with one click.
 - **Jump to the code.** Click the question's file to open it at the lines the question is about.
 - **Gutter marks.** Lines you've been quizzed on get a green or red dot. Hover it for the question.
 - **Review staged changes.** The 🎓 button in the Source Control view quizzes you on your own staged
   diff before you commit. No agent needed.
-- **Notebook.** Saved questions in a tree, by project and topic. Click one to see it and its code.
-- **Stats and weak spots:** questions answered, how often you're right over 30 days, your day streak,
-  and the topics you miss most.
+- **Your progress:** how many you've answered, how often you're right, your streak, the topics worth
+  another look, and your saved questions.
 - **Status bar and a notification** when the agent finishes.
 
 ## Get started
 
 1. Install a coding agent: [Claude Code](https://claude.com/claude-code), Codex CLI or Gemini CLI.
-2. Click **Start hyperfocus** at the top of the hyperfocus panel. It runs your agent inside
-   hyperfocus in a terminal (with `npx` if you haven't installed it: `npm i -g @ddalus/hyperfocus`).
-3. Give the agent a task. Questions show up in the panel while it works.
+2. Open the hyperfocus sidebar and click **Start**. It runs your agent through hyperfocus in a
+   terminal (with `npx` if you haven't installed it: `npm i -g @ddalus/hyperfocus`).
+3. Give the agent a task. Questions show up in the sidebar while it works.
 
 The **Learn while your AI codes** walkthrough (Help → Welcome) goes through the same steps.
 
@@ -44,7 +42,7 @@ of three on Claude Haiku. [What it costs](https://tejasvisjain.github.io/hyperfo
 
 | Setting | Default | |
 | --- | --- | --- |
-| `hyperfocus.agent` | ask | which agent to wrap: `claude`, `codex` or `gemini` |
+| `hyperfocus.agent` | first installed | which agent to run: `claude`, `codex` or `gemini` |
 | `hyperfocus.command` | `npx @ddalus/hyperfocus` | left as it is, the extension uses `hyperfocus` when installed; anything else runs exactly as written |
 | `hyperfocus.notifications` | on | notify when the agent finishes |
 | `hyperfocus.gutterMarks` | on | the green and red marks beside lines you were quizzed on |
@@ -58,13 +56,13 @@ The live view needs hyperfocus 0.7.0 or later. With an older one the panel says 
 `../src`, so the two can't drift apart unnoticed. The webview, commands and decorations aren't
 tested automatically; before a release, check them by hand in VS Code with the new hyperfocus:
 
-- [ ] Start hyperfocus from the panel (one agent, several, none; installed and not)
-- [ ] The Live card follows the agent; answer by click and by `1`–`9`; the terminal agrees
-- [ ] Follow-up, save, bad question, next, skip; back to the agent mid-question
-- [ ] Agent finishes: notification, keep going, back
+- [ ] Start from the panel (one agent, several, none; hyperfocus installed and not): no prompts
+- [ ] Sidebar open: the terminal stays on the agent and the question appears in the panel; sidebar closed: the terminal asks
+- [ ] Answer by click and by `1`–`9`; Next, Save, follow-up, skip, not a good question
+- [ ] Agent finishes mid-question: notification, Keep answering, Done
 - [ ] Click the question's file: the right lines open, highlighted
 - [ ] Gutter marks appear after answering, follow edits, hide with the setting
-- [ ] Notebook tree updates on save; an entry opens its card and code
+- [ ] Saved questions appear under Your progress; Open the code works
 - [ ] Review staged changes: questions appear, End review stops it; nothing staged says so
 - [ ] Status bar text and click, with and without a session
 - [ ] An older hyperfocus (0.6) shows the update message

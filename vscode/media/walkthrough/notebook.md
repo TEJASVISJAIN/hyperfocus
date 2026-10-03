@@ -1,7 +1,7 @@
-## Your notebook
+## Saved questions and reviews
 
-Saved questions collect in the **Notebook** view, grouped by project and topic. Click one to see
-it again and jump to its code.
+Questions you save are listed under **Your progress** in the sidebar, with a link to their code.
+**Open as Markdown** shows them all as one document.
 
 Lines you've been quizzed on get a small green or red mark in the editor's gutter. Hover it to see
 the question. Turn them off with `hyperfocus.gutterMarks`.

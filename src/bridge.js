@@ -19,6 +19,7 @@ import { redactSecrets } from './redact.js';
  *   { type: 'answer', id, chosen } | { type: 'skip', id } | { type: 'next', id } | { type: 'save', id }
  *   { type: 'rate', id, rating: 'bad' } | { type: 'followUp', id, ask }
  *   { type: 'keepGoing' } | { type: 'back' } | { type: 'exit' } (Esc: back to the agent) | { type: 'quiet' }
+ *   { type: 'watching', visible } — the panel is on screen: while one is, the terminal leaves the quiz to it
  */
 export const BRIDGE_PROTOCOL = 1;
 
@@ -49,6 +50,7 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
     ? { path: join(privateDir, 'bridge.sock'), isPipe: false, remove: () => rmSync(privateDir, { recursive: true, force: true }) }
     : localEndpoint(`hyperfocus-bridge-${process.pid}-${bridgeCount++}`, platform);
   const clients = new Set();
+  const watching = new Set(); // clients whose panel is on screen
   let connections = 0;
   let lastSent = '';
 
@@ -61,8 +63,12 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
     clients.add(socket);
     connections++;
     socket.setEncoding('utf8');
-    socket.on('close', () => clients.delete(socket));
-    socket.on('error', () => clients.delete(socket));
+    const forget = () => {
+      clients.delete(socket);
+      watching.delete(socket);
+    };
+    socket.on('close', forget);
+    socket.on('error', forget);
     send(socket, JSON.stringify({ type: 'hello', protocol: BRIDGE_PROTOCOL, pid: process.pid, cwd: meta.cwd, agent: meta.agent }) + '\n');
     send(socket, safely(stateLine) ?? '');
     let buffered = '';
@@ -90,6 +96,11 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
       return debugLog('unparseable bridge message', line.slice(0, 200));
     }
     if (!action || typeof action.type !== 'string') return;
+    if (action.type === 'watching') {
+      if (action.visible === true) watching.add(socket);
+      else watching.delete(socket);
+      return;
+    }
     const outcome = safely(() => act(action));
     if (outcome === 'stale') send(socket, JSON.stringify({ type: 'stale', id: action.id }) + '\n');
     publish();
@@ -140,6 +151,10 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
     /** Clients connected right now. */
     get clientCount() {
       return clients.size;
+    },
+    /** Clients whose panel is on screen right now. */
+    get watcherCount() {
+      return watching.size;
     },
     /** Clients that have ever connected. */
     get connectionCount() {

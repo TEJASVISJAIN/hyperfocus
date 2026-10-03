@@ -186,7 +186,7 @@ test('the connection comes back after the bridge restarts', async () => {
 });
 
 // ── Controls, code locations, gutter marks, notebook, notifications, start ──
-const { anchorRange, controlsFor, finishedNow, gutterMarks, notebookTree, startCommand, findOnPath, resolveInside } = require('./panel-state');
+const { anchorRange, controlsFor, finishedNow, gutterMarks, startCommand, findOnPath, resolveInside } = require('./panel-state');
 
 test('controls follow the same rules as the keys', () => {
   assert.deepEqual(controlsFor(state), { answer: true, skip: true, rate: true, next: false, save: false, followUp: false, keepGoing: false, back: false, exit: true });
@@ -244,19 +244,6 @@ test('gutter marks: this file, this project, latest answer per question, nothing
   assert.match(marks[0].hover, /✅/);
 });
 
-test('the notebook tree: project, then tag, then question, newest project first', () => {
-  const saved = [
-    { ts: '2026-10-01T10:00:00Z', cwd: '/work/app', question: 'One?', tags: ['async', 'errors'] },
-    { ts: '2026-10-01T11:00:00Z', cwd: '/work/app', question: 'Two?', tags: ['async'] },
-    { ts: '2026-10-02T09:00:00Z', cwd: '/work/web', question: 'Three?' },
-  ];
-  const tree = notebookTree(saved);
-  assert.deepEqual(tree.map((project) => project.label), ['web', 'app']);
-  assert.deepEqual(tree[0].children.map((tag) => tag.label), ['untagged']);
-  assert.deepEqual(tree[1].children.map((tag) => [tag.label, tag.children.map((entry) => entry.label)]), [['async', ['Two?', 'One?']], ['errors', ['One?']]]);
-  assert.equal(tree[1].children[0].children[0].entry, saved[1]);
-});
-
 test('the "agent finished" notice fires once, on the change, and never while quiet or for a staged review', () => {
   const busy = { ...state, agent: { ...state.agent, finished: false } };
   const done = { ...state, agent: { ...state.agent, finished: true } };
@@ -287,25 +274,45 @@ test('finding programs on PATH, with Windows extensions', () => {
   assert.equal(findOnPath('codex', { env: { Path: 'C:\\x;C:\\tools', PATHEXT: '.EXE;.CMD' }, platform: 'win32', isFile }), 'C:\\tools\\codex.cmd');
 });
 
-test('the live card offers exactly the controls the state allows', () => {
+test('the live card: options while asking, then the result with Next and Save, the rest as small links', () => {
   const html = (s, opts) => liveHtml(liveModel(s, opts));
   const asking = html(state);
   assert.equal((asking.match(/data-act="answer"/g) ?? []).length, 2);
   assert.match(asking, /data-act="skip"/);
-  assert.doesNotMatch(asking, /data-act="next"|data-act="save"|class="follow-up"/);
+  assert.match(asking, /Not a good question/);
+  assert.doesNotMatch(asking, /data-act="next"|data-act="save"|data-act="back"|data-act="exit"/);
 
   const answered = html({ ...state, feedback: { chosen: 1, correct: false, answer: 0, why: 'x', saved: false } });
   assert.doesNotMatch(answered, /data-act="answer"/);
-  assert.match(answered, /data-act="next"/);
-  assert.match(answered, /data-act="save"/);
-  assert.match(answered, /class="follow-up"/);
-  assert.match(html({ ...state, feedback: { chosen: 1, correct: false, answer: 0, why: 'x', saved: true } }), /✓ saved/);
+  assert.match(answered, /data-act="next"[^>]*>Next question</, 'more are waiting');
+  assert.match(answered, /data-act="save"[^>]*>Save</);
+  assert.match(answered, /Ask a follow-up/);
+  assert.match(answered, /<form class="follow-up"[^>]*hidden/, 'the follow-up box opens on demand');
+  assert.match(html({ ...state, queued: 0, feedback: { chosen: 1, correct: false, answer: 0, why: 'x', saved: true } }), /data-act="next"[^>]*>Done<[\s\S]*Saved ✓/);
 
   const finished = html({ ...state, agent: { ...state.agent, finished: true } });
-  assert.match(finished, /data-act="back"[^>]*>Back to the agent/);
-  assert.match(finished, /data-act="keepGoing"/);
+  assert.match(finished, /Claude finished\./);
+  assert.match(finished, /data-act="keepGoing"[^>]*>Keep answering/);
+  assert.match(finished, /data-act="back"[^>]*>Done/);
   assert.match(html(state, { agent: 'staged' }), />End review</, 'a staged review can be ended any time');
   assert.match(asking, /data-open="question"/, 'the file opens the code');
+  assert.match(asking, /Spot the bug · <a/, 'the kind of question is named');
+  assert.match(html({ ...state, question: null }), /on its way/);
+});
+
+test('the idle panel says what hyperfocus is and offers one way to start; history shows only when there is some', () => {
+  const { dashboardHtml } = require('./views');
+  const empty = { answered: 0, correct: 0, last30: { answered: 0, correct: 0 }, streak: 0, weakSpots: [], missed: [], saved: [] };
+  const idle = dashboardHtml(empty, { running: false, startLabel: 'Start Claude Code with hyperfocus' });
+  assert.match(idle, /data-msg="start"[^>]*>Start Claude Code with hyperfocus</);
+  assert.doesNotMatch(idle, /Saved|Missed|answered/, 'no empty sections');
+  assert.equal(dashboardHtml(empty, { running: true }), '', 'nothing competes with the question');
+  const some = { ...empty, answered: 4, last30: { answered: 4, correct: 3 }, streak: 2, saved: [{ question: 'Kept?', options: ['a'], answer: 0, chosen: 0, correct: true, file: 'x.js' }] };
+  const history = dashboardHtml(some, { running: true });
+  assert.match(history, /<b>4<\/b> answered · <b>75%<\/b> right in the last 30 days · 2-day streak/);
+  assert.match(history, /Saved \(1\)/);
+  assert.match(history, /data-open-saved="0"/);
+  assert.doesNotMatch(history, /Missed lately|Worth another look/);
 });
 
 test('a staged review is never adopted by a window for another folder', () => {
@@ -326,4 +333,25 @@ test('the dashboard copes with a history entry without a timestamp', () => {
   const { render } = require('./views');
   const data = { answered: 1, correct: 0, last30: { answered: 1, correct: 0 }, streak: 0, weakSpots: [], missed: [{ question: 'Q?', options: ['a'], answer: 0, chosen: 0, correct: false, ts: 12 }], saved: [] };
   assert.match(render(data, { scope: 'project', project: 'x', nonce: 'n' }), /Q\?/);
+});
+
+test('the connection tells the session whether the panel is on screen, again after a reconnect', async () => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'hf-live-')), 'sessions');
+  const current = { state };
+  const live = new LiveConnection({ sessionsDir: dir, folders: () => ['/work/app'], pollMs: 50, backoffMs: [20] });
+  live.setWatching(true);
+  live.start();
+  try {
+    let bridge = await realBridge(dir, current);
+    await until(() => bridge.watcherCount === 1, 'watching after connect');
+    live.setWatching(false);
+    await until(() => bridge.watcherCount === 0, 'not watching');
+    live.setWatching(true);
+    bridge.close();
+    bridge = await realBridge(dir, current);
+    await until(() => bridge.watcherCount === 1, 'watching again after reconnect');
+    bridge.close();
+  } finally {
+    live.dispose();
+  }
 });
