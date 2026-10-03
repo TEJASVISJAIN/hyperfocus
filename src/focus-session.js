@@ -119,6 +119,21 @@ export function createFocusSession({
       view.handleKey(key);
       redraw();
     },
+
+    /** The focus view's state plus the run it is about, for the VS Code panel (see bridge.js). */
+    snapshot() {
+      const state = view.snapshot();
+      const { run } = log;
+      const files = run ? [...new Set(run.edits.map((edit) => relativeToProject(edit.path)))] : [];
+      return { ...state, run: { ...state.run, startedAt: run?.startedAt ?? null, prompt: run?.prompt ?? null, files } };
+    },
+
+    /** An action from another surface, done as the matching key would do it. */
+    act(action) {
+      const outcome = view.act(action);
+      if (outcome === 'ok') redraw();
+      return outcome;
+    },
   };
 }
 

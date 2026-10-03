@@ -1,5 +1,6 @@
 import { claudeAgent } from './agents/claude.js';
 import { alertUser } from './alert.js';
+import { startBridge } from './bridge.js';
 import { changedFiles } from './activity-log.js';
 import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
 import { debugLog } from './debug-log.js';
@@ -46,6 +47,7 @@ export async function runFocus(agentPath, agentArgs, options) {
       screen.showClaude();
       restoreTerminal();
       eventServer.close();
+      bridge?.close();
       launch.cleanup();
       process.exit(exitCodeFor(result));
     },
@@ -56,6 +58,14 @@ export async function runFocus(agentPath, agentArgs, options) {
   const runLog = createRunLog();
   const loggedRuns = new WeakSet();
   let sessionId = null;
+  let quiet = Boolean(config.quiet);
+  /** @type {Awaited<ReturnType<typeof startBridge>> | null} */
+  let bridge = null;
+  // The terminal and any connected panel both show the session, so both hear about every change.
+  const redraw = () => {
+    screen.redrawFocus();
+    bridge?.publish();
+  };
   const session = createFocusSession({
     claudePath: agentPath,
     agent,
@@ -63,7 +73,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     config,
     projectAccuracy: recentAccuracy({ cwd }),
     badQuestions: () => recentBadQuestions({ cwd }),
-    redraw: () => screen.redrawFocus(),
+    redraw,
     onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run) }),
     onSave: (entry, run) => saveQuestion(entry, { cwd, files: changedFiles(run) }),
     onBack: () => {
@@ -72,6 +82,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     },
     onExit: () => leaveFocus(),
     onQuiet: () => {
+      quiet = true;
       policy.goQuiet();
       leaveFocus();
     },
@@ -83,6 +94,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     session.view.hideRecap();
     session.view.hideFinished();
     screen.showClaude();
+    bridge?.publish();
   };
 
   const screen = createScreen({
@@ -132,7 +144,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     });
     if (recap) {
       session.view.showRecap(recap, () => screen.showClaude());
-      screen.redrawFocus();
+      redraw();
     } else {
       screen.showClaude();
     }
@@ -148,7 +160,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     // Mid-question: keep the question and let the user choose to go back or keep going.
     if (session.view.isAtQuestion) {
       session.view.showFinished({ reason, changedFiles: changedFiles(session.run), score: session.view.score });
-      screen.redrawFocus();
+      redraw();
       return alert();
     }
     showRecapOrClaude(reason);
@@ -184,7 +196,19 @@ export async function runFocus(agentPath, agentArgs, options) {
   });
 
   // Keeps the elapsed time on the status line moving.
-  setInterval(() => screen.redrawFocus(), CLOCK_TICK_MS).unref();
+  setInterval(redraw, CLOCK_TICK_MS).unref();
+
+  // The VS Code panel's way in. Without it the terminal works exactly the same, so a failure here
+  // is logged and left at that.
+  try {
+    bridge = await startBridge({
+      meta: { cwd, agent: agent.id },
+      state: () => ({ ...session.snapshot(), quiet }),
+      act: (action) => session.act(action),
+    });
+  } catch (error) {
+    debugLog('could not start the panel bridge', error.message);
+  }
 
   // However hyperfocus exits, never leave the user on the focus screen with the cursor hidden.
   process.on('exit', () => screen.showClaude());

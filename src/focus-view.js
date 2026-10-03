@@ -106,6 +106,8 @@ export function createFocusView({
   let peek = [];
   let liveShown = live && liveToggle;
   let clickRows = new Map(); // screen row (1-based) → the key a click there stands for
+  const ids = new WeakMap(); // question → its number in this session, so other surfaces can name it
+  let lastId = 0;
 
   const current = () => queue[0];
 
@@ -137,6 +139,31 @@ export function createFocusView({
     onKeepGoing?.();
   }
 
+  function skip(question) {
+    results.push('skip');
+    onAnswer({ question, chosen: null, correct: null, skipped: true });
+    next();
+  }
+
+  // A bad question: reported as skipped and rated, so it never counts, comes back or repeats.
+  function rateBad(question) {
+    if (!feedback) results.push('skip');
+    pendingPredictions = pendingPredictions.filter((pending) => pending.question !== question);
+    onAnswer({ question, chosen: null, correct: null, skipped: true, rating: 'bad' });
+    next();
+  }
+
+  function save(question) {
+    if (feedback.saved) return;
+    const isCorrect = question.kind === 'predict' ? null : feedback.chosen === question.answer;
+    feedback.saved = onSave({ question, chosen: feedback.chosen, correct: isCorrect, thread: [...followUp.thread] }) !== false;
+  }
+
+  function askFollowUp(ask) {
+    followUp = { ...followUp, draft: null, pendingAsk: ask, failed: false };
+    onFollowUp?.({ question: feedback.question, chosen: feedback.chosen, ask, thread: [...followUp.thread] });
+  }
+
   function score(isCorrect) {
     results.push(isCorrect ? 'right' : 'wrong');
     answered++;
@@ -151,9 +178,7 @@ export function createFocusView({
     else if (BACKSPACES.has(key)) followUp.draft = [...followUp.draft].slice(0, -1).join('');
     else if (key === ENTER) {
       const ask = followUp.draft.trim();
-      if (!ask) return;
-      followUp = { ...followUp, draft: null, pendingAsk: ask, failed: false };
-      onFollowUp?.({ question: feedback.question, chosen: feedback.chosen, ask, thread: [...followUp.thread] });
+      if (ask) askFollowUp(ask);
     } else if (key >= ' ' && key !== '\x7f') followUp.draft += key;
   }
 
@@ -230,6 +255,7 @@ export function createFocusView({
       peek = screenLines;
     },
     addQuestions(questions) {
+      for (const question of questions) ids.set(question, ++lastId);
       queue.push(...questions);
     },
     newRun(startedAt) {
@@ -319,33 +345,119 @@ export function createFocusView({
       }
       if (!question) return;
 
-      // A bad question: reported as skipped and rated, so it never counts, comes back or repeats.
-      if (key === 'b') {
-        if (!feedback) results.push('skip');
-        pendingPredictions = pendingPredictions.filter((pending) => pending.question !== question);
-        onAnswer({ question, chosen: null, correct: null, skipped: true, rating: 'bad' });
-        return next();
-      }
+      if (key === 'b') return rateBad(question);
       if (feedback) {
-        if (key === 'w' && onSave) {
-          if (feedback.saved) return;
-          const isCorrect = question.kind === 'predict' ? null : feedback.chosen === question.answer;
-          feedback.saved = onSave({ question, chosen: feedback.chosen, correct: isCorrect, thread: [...followUp.thread] }) !== false;
-          return;
-        }
+        if (key === 'w' && onSave) return save(question);
         if (key === 'f' && followUp.pendingAsk === null) return void (followUp.draft = '');
         return next();
       }
       if (arrow) return void (selected = (selected + arrow + question.options.length) % question.options.length);
       if (key === ENTER) return answer(question, selected);
-      if (key === 's') {
-        results.push('skip');
-        onAnswer({ question, chosen: null, correct: null, skipped: true });
-        return next();
-      }
+      if (key === 's') return skip(question);
       const chosen = Number(key) - 1;
       if (!/^[1-9]$/.test(key) || chosen >= question.options.length) return;
       answer(question, chosen);
+    },
+
+    /**
+     * What this view shows, as plain data for other surfaces (the VS Code panel). The answer and
+     * why stay out until the user has answered.
+     */
+    snapshot() {
+      const question = current();
+      const isPredict = question?.kind === 'predict';
+      return {
+        agent: { activity, since: activityStartedAt, busy: !IDLE_ACTIVITIES.has(activity), finished: Boolean(finished) },
+        run: { summary },
+        question: question
+          ? {
+              id: ids.get(question) ?? 0,
+              number: seen + 1,
+              kind: question.kind ?? 'why',
+              q: question.q,
+              options: [...question.options],
+              ...(question.code ? { code: question.code } : {}),
+              ...(question.file ? { file: question.file } : {}),
+              ...(question.anchor ? { anchor: question.anchor } : {}),
+              ...(question.tags?.length ? { tags: [...question.tags] } : {}),
+            }
+          : null,
+        queued: Math.max(0, queue.length - 1),
+        feedback: feedback
+          ? {
+              chosen: feedback.chosen,
+              correct: isPredict ? null : feedback.chosen === question.answer,
+              answer: isPredict ? null : question.answer,
+              why: isPredict ? null : question.why,
+              saved: Boolean(feedback.saved),
+            }
+          : null,
+        thread: [...followUp.thread.map(({ ask, answer }) => ({ ask, answer })), ...(followUp.pendingAsk !== null ? [{ ask: followUp.pendingAsk, answer: null }] : [])],
+        followUpFailed: followUp.failed,
+        score: { answered, correct, streak },
+        result: result ? { text: result.text, good: result.good } : null,
+      };
+    },
+
+    /**
+     * Does what a key would, for a surface that names its action instead of pressing it. An action
+     * naming a question (`id`) that is no longer on screen is 'stale'; one that makes no sense right
+     * now is 'ignored'. The same rules as the keys apply: while the "agent finished" choice is up,
+     * only answering, skipping, keep going and back do anything.
+     * @param {{ type: string, id?: number, chosen?: number, ask?: string, rating?: string }} action
+     * @returns {'ok' | 'stale' | 'ignored'}
+     */
+    act(action) {
+      const question = current();
+      if (action.id !== undefined && action.id !== (question && ids.get(question))) return 'stale';
+      const blockedByFinished = finished && !['answer', 'skip', 'keepGoing', 'back', 'quiet'].includes(action.type);
+      if (blockedByFinished) return 'ignored';
+      switch (action.type) {
+        case 'answer': {
+          const { chosen } = action;
+          if (!question || feedback || !Number.isInteger(chosen) || chosen < 0 || chosen >= question.options.length) return 'ignored';
+          if (finished) keepGoing();
+          answer(question, chosen);
+          return 'ok';
+        }
+        case 'skip':
+          if (!question || feedback) return 'ignored';
+          if (finished) keepGoing();
+          skip(question);
+          return 'ok';
+        case 'next':
+          if (!feedback) return 'ignored';
+          next();
+          return 'ok';
+        case 'rate':
+          if (!question || action.rating !== 'bad') return 'ignored';
+          rateBad(question);
+          return 'ok';
+        case 'save':
+          if (!feedback || !onSave) return 'ignored';
+          save(question);
+          return 'ok';
+        case 'followUp': {
+          const ask = typeof action.ask === 'string' ? action.ask.trim() : '';
+          if (!feedback || !ask || followUp.pendingAsk !== null || !onFollowUp) return 'ignored';
+          askFollowUp(ask);
+          return 'ok';
+        }
+        case 'keepGoing':
+          if (!finished) return 'ignored';
+          keepGoing();
+          return 'ok';
+        case 'back':
+          if (!finished || !onBack) return 'ignored';
+          onBack();
+          return 'ok';
+        case 'quiet':
+          if (!onQuiet) return 'ignored';
+          onQuiet();
+          return 'ok';
+        default:
+          return 'ignored';
+      }
     },
 
     render({ cols, rows, now = Date.now() }) {

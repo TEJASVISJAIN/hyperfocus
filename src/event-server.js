@@ -1,10 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { rmSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { debugLog } from './debug-log.js';
 import { toFocusEvent } from './hook-events.js';
+import { localEndpoint } from './local-endpoint.js';
 
 let serverCount = 0;
 
@@ -12,12 +10,7 @@ let serverCount = 0;
 // emits them as FocusEvents.
 /** @param {{ platform?: string, toEvent?: (payload: any) => any }} [options] */
 export async function startEventServer({ platform = process.platform, toEvent = toFocusEvent } = {}) {
-  const name = `hyperfocus-${process.pid}-${serverCount++}`;
-  const isPipe = platform === 'win32';
-  const socketPath = isPipe ? `\\\\.\\pipe\\${name}` : join(tmpdir(), `${name}.sock`);
-  const removeSocket = () => {
-    if (!isPipe) rmSync(socketPath, { force: true });
-  };
+  const { path: socketPath, remove: removeSocket } = localEndpoint(`hyperfocus-${process.pid}-${serverCount++}`, platform);
   removeSocket();
 
   const events = new EventEmitter();

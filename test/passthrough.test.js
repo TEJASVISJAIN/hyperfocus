@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
+import { listSessions } from '../src/bridge.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
 const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
@@ -322,6 +324,48 @@ test('when Claude finishes mid-question, the quiz stays up and Enter goes back',
   assert.equal((await focus.userScreen()).type, 'normal', 'back on Claude');
   focus.terminal.write('exit 0\r');
   await focus.exited;
+});
+
+test('a panel finds the running session by its file and answers the question on screen', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus([], { home, env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  focus.terminal.write('hook 50 PostToolUse\r');
+  await focus.waitForScreen(/Why retry refreshToken\?/);
+
+  const [session] = listSessions(join(home, 'sessions'));
+  assert.equal(session.cwd, process.cwd());
+  assert.equal(session.agent, 'claude');
+  const socket = connect(session.endpoint);
+  let received = '';
+  socket.setEncoding('utf8');
+  socket.on('data', (chunk) => (received += chunk));
+  const messages = () => received.split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  const until = async (predicate) => {
+    for (let waited = 0; waited < 5000; waited += 50) {
+      const found = messages().find(predicate);
+      if (found) return found;
+      await pause(50);
+    }
+    throw new Error('no such message: ' + received.slice(-500));
+  };
+  const { question } = await until((message) => message.type === 'state' && message.question);
+  assert.equal(question.q, 'Why retry refreshToken?');
+
+  socket.write(JSON.stringify({ type: 'answer', id: question.id, chosen: question.options.indexOf('Token expiry races') }) + '\n');
+  await until((message) => message.type === 'state' && message.feedback?.correct === true);
+  await focus.waitForScreen(/Concurrent requests can race/); // the terminal shows the same feedback
+  const history = readFileSync(join(home, 'history.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(history.at(-1).question, 'Why retry refreshToken?');
+  assert.equal(history.at(-1).correct, true);
+
+  socket.destroy();
+  focus.terminal.write('\x1b');
+  await pause(300);
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+  assert.ok(!existsSync(join(home, 'sessions', `${session.pid}.json`)), 'the session file goes with the session');
 });
 
 test('the first time the quiz opens, an intro explains the keys, once', async () => {

@@ -33,6 +33,7 @@ flowchart LR
         engine[Quiz engine]
         view[Focus view<br/>quiz + recap]
         server[Event server<br/>unix socket]
+        bridge[Bridge<br/>unix socket]
         history[(~/.hyperfocus/history.jsonl)]
     end
 
@@ -51,6 +52,8 @@ flowchart LR
     policy --> screen
     view --> screen
     session --> history
+    session <--> bridge
+    bridge <-->|state / actions, JSON lines| panel[VS Code panel]
 ```
 
 There are three kinds of process:
@@ -61,6 +64,7 @@ There are three kinds of process:
 | `claude` (interactive) | the whole session, child of hyperfocus in a PTY | the real Claude Code, unmodified |
 | `hyperfocus-hook.js` | milliseconds, once per hook event | forwards one hook payload to hyperfocus |
 | `claude -p --model haiku` | about 6s, once per question batch | writes the summary and questions |
+| VS Code extension (optional) | while the editor is open | follows and drives the session through the [bridge](#the-panel-bridge) |
 
 ## Processes and boundaries
 
@@ -128,6 +132,9 @@ flowchart TB
     app --> screen[screen.js<br/>view switching]
     app --> autoswitch[auto-switch.js<br/>when to switch]
     app --> server[event-server.js<br/>socket → events]
+    app --> bridge[bridge.js<br/>session ⇄ panel]
+    server --> endpoint[local-endpoint.js<br/>socket / pipe path]
+    bridge --> endpoint
     app --> session[focus-session.js<br/>events → state]
     app --> recap[recap.js]
     app --> alert[alert.js<br/>bell + notification]
@@ -158,7 +165,8 @@ flowchart TB
 | `src/screen.js` | which view is on screen; alternate screen; hold back and replay output; key routing; mouse modes; the peek at Claude's screen | `passthrough.test.js`, `screen.test.js` |
 | `src/auto-switch.js` | the switching rules (delay, something to ask about, plan size, short-run projects, typing grace, manual override, quiet) | `auto-switch.test.js` (fake clock) |
 | `src/event-server.js` + `hook-events.js` | unix socket server; hook payload → `FocusEvent` | `events.test.js` |
-| `src/focus-session.js` | routes events to the log, engine and view; status line labels | via end-to-end tests |
+| `src/bridge.js` + `local-endpoint.js` | the panel bridge: session file, state out, actions in; the socket or pipe path both servers use | `bridge.test.js` (a fake panel client), end-to-end PTY test |
+| `src/focus-session.js` | routes events to the log, engine and view; status line labels; the session snapshot and actions for the bridge | via `bridge.test.js` and end-to-end tests |
 | `src/activity-log.js` | per-run record of prompt, reads, diffs (with anchors), commands and a timeline, with size caps; Claude's task list | `activity-log.test.js` |
 | `src/redact.js` | hides tokens and secret values; recognises files that hold secrets | `redact.test.js` |
 | `src/code-anchors.js` | a change's anchor lines, and whether they are still in the file | `code-anchors.test.js` |
@@ -173,7 +181,7 @@ flowchart TB
 | `src/notes.js` | run log (`runs.jsonl`, with durations), `--notes`, the Markdown checklist, the median run length | `notes.test.js` |
 | `src/review.js` | the `--review` screen | by hand (see below) |
 | `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; question kinds, grounding and validation; shuffling; difficulty | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
-| `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist | `focus-view*.test.js`, `recap.test.js` |
+| `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist; `snapshot()` and `act()`, the same state and actions as plain data | `focus-view*.test.js`, `recap.test.js` |
 | `src/history.js` | append answers (with tags and ratings); `--stats` and its insights; recent accuracy; bad questions to avoid; missed questions still in the code | `history.test.js` |
 | `src/alert.js`, `debug-log.js`, `cli-args.js`, `claude-binary.js`, `spawn-helper-permissions.js` | small utilities | indirectly |
 
@@ -462,6 +470,46 @@ Size limits keep the quiz call small and cheap: a diff is capped at 4KB per edit
 run, and the **oldest** diffs are dropped first. Every edited file stays listed, with its diff
 replaced by `(older change omitted)`.
 
+## The panel bridge
+
+The VS Code extension shows the live session and can answer for the user. hyperfocus stays the only
+thing that calls a model or decides quiz state; the panel renders what it is sent and sends back
+what the user did.
+
+```mermaid
+sequenceDiagram
+    participant P as VS Code panel
+    participant D as ~/.hyperfocus/sessions/
+    participant B as Bridge
+    participant S as Focus session / view
+    participant T as Terminal
+    B->>D: <pid>.json { protocol, pid, cwd, agent, endpoint, startedAt }
+    P->>D: watch; pick the session for this folder
+    P->>B: connect
+    B-->>P: hello { protocol: 1, pid, cwd, agent }
+    B-->>P: state (snapshot)
+    P->>B: answer { id, chosen }
+    B->>S: act(answer) — same code path as the key
+    S->>T: redraw
+    B-->>P: state (feedback)
+    Note over T,B: a key in the terminal redraws, and the redraw publishes to the panel too
+```
+
+- **Discovery.** Each session writes `sessions/<pid>.json` in the data folder and removes it on exit.
+  A file whose process is gone is ignored and deleted by whoever reads it (`listSessions`).
+- **Transport.** A second local endpoint beside the hook socket (named pipe on Windows), owner-only on
+  Unix. Newline-delimited JSON both ways; any number of clients.
+- **State.** `focus-view` `snapshot()` (question with its id and anchor, feedback, thread, score,
+  agent status, finished) plus the run from the session and the quiet flag. The answer and why are
+  only sent after the user has answered. Every string goes through `redact.js`. State is sent on
+  connect and after every redraw, only when it changed.
+- **Actions.** `answer`, `skip`, `next`, `save`, `rate`, `followUp`, `keepGoing`, `back`, `quiet`,
+  through `focus-view` `act()`, which shares its code with the keys and follows the same rules (for
+  example, only answering, skipping, keep going and back work while "agent finished" is up). An
+  action naming a question id that is no longer up gets `{ type: 'stale', id }`.
+- **Versioning.** `protocol` is in the session file and the hello; a client that doesn't know the
+  number says which hyperfocus it needs instead of guessing.
+
 ## Is it still in the code?
 
 The user can steer Claude from change X to change Y halfway through. Questions about X, and notes
@@ -522,6 +570,8 @@ flowchart LR
 | quiz model API error | no retry; the view keeps showing the summary and "Thinking of a question…" |
 | model returns some malformed questions | those questions are dropped, the rest are kept |
 | agent finishes mid-call | the call is killed and its result ignored |
+| the panel bridge can't start, or a client sends junk | logged with `HYPERFOCUS_DEBUG=1`; the terminal works as before, nothing a client sends can throw into the session |
+| a session file is left by a crashed hyperfocus | its pid is dead, so readers ignore and delete it |
 | history or run log can't be written | logged with `HYPERFOCUS_DEBUG=1`; the session carries on |
 | bad value in `config.json` | printed once at startup; that setting falls back to its default |
 | the model quotes code that isn't in the diff | the excerpt is dropped; a "bug" or "output" question without one is dropped |
@@ -530,7 +580,7 @@ flowchart LR
 
 ## Testing strategy
 
-Tests sit at seven agreed seams, all behind public interfaces:
+Tests sit at eight agreed seams, all behind public interfaces:
 
 1. **Hook → socket → events:** the real hook script against a real socket.
 2. **Activity log:** fed recorded hook payloads through the same translation the server uses.
@@ -540,7 +590,9 @@ Tests sit at seven agreed seams, all behind public interfaces:
 5. **Focus view and recap:** rendering as a function of state and size, plus key handling.
 6. **History, `--stats`, `--notes` and the still-in-the-code check:** against temporary files and a
    stub file reader.
-7. **End to end in a PTY:** `hyperfocus` runs inside an outer pseudo-terminal against
+7. **The panel bridge:** a fake panel client on a real socket against a real focus session (with the
+   stub model for follow-ups): snapshot, actions, staleness, several clients, redaction, session files.
+8. **End to end in a PTY:** `hyperfocus` runs inside an outer pseudo-terminal against
    `test/fixtures/fake-claude.js`, which reports what it receives and can run the injected hook
    commands the way Claude Code would.
 
@@ -557,6 +609,7 @@ history with one kept and one discarded question.
 | Where the quiz lives | wrapper that owns the terminal | second window (people won't switch views); a new frontend on the Agent SDK (would mean rebuilding Claude Code's UI) |
 | Seeing agent activity | hooks via `--settings` | parsing the transcript JSONL (lags, undocumented format); editing `settings.json` (touches user config) |
 | Hook → hyperfocus transport | unix socket, one line per payload | file tailing (polling, cleanup); HTTP (a port to manage) |
+| Panel ↔ hyperfocus | a second socket per session, found through a session file; actions go through the same code as keys | the panel calling the model itself (two quiz engines, two cost stories); a port (firewall prompts, other users on the machine); sending keystrokes (breaks when the intro or a draft is up) |
 | Screen switching | alternate screen + byte replay | always repainting from the mirror (drifts from Claude's own screen model) |
 | Question model | `claude -p --model haiku`, lean flags, no thinking, user settings kept for auth | Anthropic SDK (needs an API key the user may not have); default flags (~21k context tokens, ~30s with thinking) |
 | When to ask again | first diff, every 3 edits, or when the queue is empty | one call per event (cost, noise) |
