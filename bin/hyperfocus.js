@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { claudeAgent } from '../src/agents/claude.js';
 import { agentNamed } from '../src/agents/index.js';
+import { ollamaWriter } from '../src/agents/ollama.js';
 import { runFocus } from '../src/app.js';
 import { resolveClaudeBinary } from '../src/claude-binary.js';
 import { parseFocusArgs } from '../src/cli-args.js';
@@ -12,14 +13,14 @@ import { INTRO_TITLE, introLines } from '../src/focus-view.js';
 import { formatStats, missedStillInCode, projectLabel, readInsights, readStats } from '../src/history.js';
 import { formatBrief, installHook, uninstallHook } from '../src/git-hook.js';
 import { defaultSavedPath, formatSaved, notebookPath, readSaved } from '../src/saved.js';
-import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
+import { formatChecklist, formatNotes, formatTiming, readNotes, readTiming } from '../src/notes.js';
 import { prepareDemo } from '../src/demo/prepare-demo.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
 import { runStaged } from '../src/staged.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo, saved, staged } = parseFocusArgs(process.argv.slice(2));
+const { agent: agentCommand, writer: writerFlag, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo, saved, staged } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -34,12 +35,19 @@ if (quiet && here) {
   process.exit(0);
 }
 if (quiet) config.quiet = true;
+if (writerFlag !== null) {
+  if (writerFlag !== 'auto' && writerFlag !== 'ollama') {
+    process.stderr.write(`hyperfocus: --writer must be "auto" or "ollama", not "${writerFlag}".\n`);
+    process.exit(1);
+  }
+  config.writer = writerFlag;
+}
 if (intro) {
   process.stdout.write([INTRO_TITLE, '', ...introLines(), ''].join('\n'));
   process.exit(0);
 }
 if (stats) {
-  process.stdout.write(formatStats(readStats(), readInsights()));
+  process.stdout.write(formatStats(readStats(), readInsights()) + formatTiming(readTiming()));
   process.exit(0);
 }
 if (saved) {
@@ -98,7 +106,7 @@ async function main() {
   const claudePath = resolveClaudeBinary();
   if (doctor) {
     ensureSpawnHelperIsExecutable();
-    const results = await runDoctor(defaultChecks({ claudePath, config, problems, dataDir: dataDir() }));
+    const results = await runDoctor(defaultChecks({ claudePath, config, problems, dataDir: dataDir(), ollama: config.writer === 'ollama' ? { adapter: ollamaWriter, model: config.ollamaModel } : null }));
     process.stdout.write(formatDoctor(results));
     process.exit(results.some((result) => result.status === 'fail') ? 1 : 0);
   }
@@ -107,7 +115,8 @@ async function main() {
       process.stderr.write('hyperfocus: --review needs a terminal.\n');
       process.exit(1);
     }
-    process.exit(await runReview({ claudePath, config }));
+    const writer = config.writer === 'ollama' ? { path: '', adapter: ollamaWriter, model: config.ollamaModel } : undefined;
+    process.exit(await runReview({ claudePath, config, writer }));
   }
 
   const agent = agentNamed(agentCommand ?? config.agent) ?? claudeAgent;
@@ -117,10 +126,13 @@ async function main() {
     process.exit(127);
   }
   // Claude writes the best questions, so it does whenever it is installed; otherwise the agent itself.
+  // With writer "ollama", a model on this machine writes them and no code leaves it.
   const writer =
-    claudePath
-      ? { path: claudePath, adapter: claudeAgent.writer, model: config.model }
-      : { path: agentPath, adapter: agent.writer, model: config.model === DEFAULT_CONFIG.model ? agent.writer.defaultModel : config.model };
+    config.writer === 'ollama'
+      ? { path: '', adapter: ollamaWriter, model: config.ollamaModel }
+      : claudePath
+        ? { path: claudePath, adapter: claudeAgent.writer, model: config.model }
+        : { path: agentPath, adapter: agent.writer, model: config.model === DEFAULT_CONFIG.model ? agent.writer.defaultModel : config.model };
 
   // `--staged`: questions about `git diff --cached` for the VS Code panel, no agent session.
   if (staged) {

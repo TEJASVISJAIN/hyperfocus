@@ -12,9 +12,10 @@ const MAX_TIMELINE_STEPS = 30;
  * @typedef {{ path: string, diff: string, anchors: string[] }} Edit
  * @typedef {{ kind: 'read' | 'edit' | 'command' | 'subagent', text: string, added?: number, removed?: number }} Step
  * @typedef {{
- *   prompt: string, startedAt: number, finished: boolean, finishedAt?: number,
+ *   prompt: string, startedAt: number, finished: boolean, finishedAt?: number, firstQuestionAt?: number,
  *   reads: string[], edits: Edit[], commands: string[], timeline: Step[]
  * }} Run
+ * `firstQuestionAt` is when the run's first question existed, set by the focus session.
  * @typedef {{ id: string, subject: string, activeForm: string, status: string }} Task
  */
 

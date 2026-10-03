@@ -88,13 +88,13 @@ export async function runStaged({
   let bridge = null;
   let asked = false;
   let endRequested = false;
-  // One batch is the review: the moment it arrives, closing the run stops the engine asking for more.
-  const redraw = () => {
-    if (!asked && session.view.isAtQuestion) {
-      asked = true;
-      session.agentEvent({ type: 'done', sessionId: 'staged' });
-    }
-    bridge?.publish();
+  const redraw = () => bridge?.publish();
+  // One reply is the review: once it is complete (questions stream in one by one before that),
+  // closing the run stops the engine asking for more.
+  const replyDone = () => {
+    if (asked || !session.view.isAtQuestion) return;
+    asked = true;
+    session.agentEvent({ type: 'done', sessionId: 'staged' });
   };
   const session = createFocusSession({
     claudePath: writer.path,
@@ -103,6 +103,7 @@ export async function runStaged({
     config: { ...config, kinds: config.kinds.filter((kind) => kind !== 'predict') },
     agent: { ...claudeAgent, name: 'Your staged change' },
     redraw: () => redraw(),
+    onReplyDone: () => replyDone(),
     onAnswer: (entry) => history.append(entry, { cwd, sessionId: 'staged', files: edits.map((edit) => edit.path), source: 'staged' }),
   });
 
@@ -132,7 +133,7 @@ export async function runStaged({
       if (endRequested) return resolve('ended');
       if (asked && !session.view.isAtQuestion) return resolve('finished');
       if (bridge.connectionCount > 0 && bridge.clientCount === 0) return resolve('left');
-      if (!asked && Date.now() - startedAt > noQuestionMs) return resolve('no-questions');
+      if (!asked && !session.view.isAtQuestion && Date.now() - startedAt > noQuestionMs) return resolve('no-questions');
     }, POLL_MS);
     const stop = () => resolve('stopped');
     process.once('SIGTERM', stop);

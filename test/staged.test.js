@@ -157,6 +157,23 @@ test('a staged review: questions about the diff go to the panel, answers go to h
   panel.socket.destroy();
 });
 
+test('a staged review waits for the whole reply: questions that stream in slowly all arrive', async () => {
+  process.env.FAKE_HAIKU_STREAM_DELAY_MS = '800';
+  try {
+    const { home, done } = stagedRun(DIFF);
+    const session = await waitForSession(join(home, 'sessions'));
+    const panel = panelClient(session.endpoint);
+    const first = await panel.until((message) => message.type === 'state' && message.question);
+    assert.equal(first.question.q, 'Why retry refreshToken?');
+    await panel.until((message) => message.type === 'state' && message.queued === 1);
+    panel.send({ type: 'back' });
+    assert.equal(await done, 0);
+    panel.socket.destroy();
+  } finally {
+    delete process.env.FAKE_HAIKU_STREAM_DELAY_MS;
+  }
+});
+
 test('a staged review ends when the panel that was following it goes away', async () => {
   const { home, done } = stagedRun(DIFF);
   const session = await waitForSession(join(home, 'sessions'));

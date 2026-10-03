@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { OLLAMA_DEFAULT_MODEL } from './agents/ollama.js';
 import { dataDir } from './data-dir.js';
 
 export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
@@ -7,7 +8,8 @@ export const QUESTION_KINDS = ['why', 'bug', 'output', 'predict'];
 /**
  * @typedef {{
  *   delayMs: number, model: string, questionsPerBatch: number, kinds: string[],
- *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy', quiet: boolean, animations: boolean, agent: 'claude' | 'codex' | 'gemini'
+ *   notifications: boolean, mouse: boolean, live: boolean, switchOn: 'edit' | 'busy', quiet: boolean, animations: boolean, agent: 'claude' | 'codex' | 'gemini',
+ *   writer: 'auto' | 'ollama', ollamaModel: string, version?: number
  * }} Config
  */
 
@@ -24,7 +26,12 @@ export const DEFAULT_CONFIG = Object.freeze({
   agent: 'claude', // what a bare `hyperfocus` wraps: claude, codex or gemini
   quiet: false, // never switch to the quiz by itself (Ctrl-] still opens it)
   live: false, // start with the live panel open (feed of agent steps + peek at Claude); `l` toggles it
+  writer: 'auto', // who writes questions: 'auto' (Claude when installed, else the agent) or 'ollama' (on this machine)
+  ollamaModel: OLLAMA_DEFAULT_MODEL, // the Ollama model, with writer 'ollama'
 });
+
+/** The config file's format. Within 1.x settings are only added; see docs/FORMATS.md. */
+export const CONFIG_VERSION = 1;
 
 const isBoolean = (value) => typeof value === 'boolean';
 const RULES = {
@@ -39,6 +46,9 @@ const RULES = {
   quiet: [isBoolean, 'must be true or false'],
   animations: [isBoolean, 'must be true or false'],
   agent: [(value) => ['claude', 'codex', 'gemini'].includes(value), 'must be "claude", "codex" or "gemini"'],
+  writer: [(value) => value === 'auto' || value === 'ollama', 'must be "auto" or "ollama"'],
+  ollamaModel: [(value) => typeof value === 'string' && value.trim() !== '', 'must be an Ollama model name such as "qwen2.5-coder:7b"'],
+  version: [(value) => Number.isInteger(value) && value >= 1, 'must be a whole number (the config format, 1)'],
 };
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 

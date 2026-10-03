@@ -14,6 +14,7 @@ export const notebookPath = (path = defaultSavedPath()) => path.replace(/\.jsonl
  */
 export function saveQuestion({ question, chosen, correct, thread = [] }, { cwd, files = [], path = defaultSavedPath(), now = new Date() }) {
   const entry = {
+    v: 1,
     ts: now.toISOString(),
     cwd,
     kind: question.kind ?? 'why',
@@ -26,6 +27,7 @@ export function saveQuestion({ question, chosen, correct, thread = [] }, { cwd, 
     ...(question.file ? { file: question.file } : {}),
     ...(question.code ? { code: question.code } : {}),
     ...(question.anchor ? { anchor: question.anchor } : {}),
+    ...(question.plan ? { plan: question.plan } : {}),
     ...(question.tags?.length ? { tags: question.tags } : {}),
     ...(thread.length ? { thread } : {}),
     files,

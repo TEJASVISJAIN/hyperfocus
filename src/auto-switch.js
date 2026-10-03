@@ -10,7 +10,8 @@ const AGENT_STEPS = new Set(['read', 'edit', 'command', 'subagent']);
  * - The agent must be busy for `delayMs` first, so quick replies never interrupt.
  * - With `switchOn: 'edit'`, there must also be something to quiz on: an edit, or a plan of two or
  *   more steps. A plan of three or more halves the wait; in a project whose runs are usually short
- *   (`shortRuns`), it takes a second edit. After 30 seconds busy, it opens regardless.
+ *   (`shortRuns`), it takes a second edit. A question already written counts too: the quiz opens
+ *   once there is one to answer, not on a timer. After 30 seconds busy, it opens regardless.
  * - Never switch away while the user is typing.
  * - The moment the agent finishes or needs the user, give the screen back, whoever opened the focus view.
  * - If the user goes back to Claude by hand, respect it until their next prompt.
@@ -29,6 +30,7 @@ export function createAutoSwitch({
   let busySince = 0;
   let edits = 0;
   let planSteps = 0;
+  let questionReady = false;
   let userChoseClaude = false;
   let lastTypedAt = -Infinity;
   let timer = null;
@@ -38,7 +40,7 @@ export function createAutoSwitch({
     timer = setTimeout(openWhenReady, waitMs);
   }
 
-  const somethingToQuizOn = () => switchOn === 'busy' || Date.now() - busySince >= LONG_RUN_MS || edits >= (shortRuns ? 2 : 1) || planSteps >= 2;
+  const somethingToQuizOn = () => switchOn === 'busy' || Date.now() - busySince >= LONG_RUN_MS || questionReady || edits >= (shortRuns ? 2 : 1) || planSteps >= 2;
   const waitMs = () => (switchOn === 'edit' && planSteps >= 3 ? delayMs / 2 : delayMs);
 
   function openWhenReady() {
@@ -61,6 +63,7 @@ export function createAutoSwitch({
         busySince = Date.now();
         edits = 0;
         planSteps = 0;
+        questionReady = false;
         userChoseClaude = false;
         if (auto) schedule(delayMs);
         return;
@@ -90,6 +93,12 @@ export function createAutoSwitch({
       clearTimeout(timer);
       timer = null;
       if (wasBusy && currentView() === 'focus') returnToClaude(event.type);
+    },
+
+    // A question is written and waiting: that is something to quiz on.
+    questionsReady() {
+      questionReady = true;
+      if (agentBusy && auto && !userChoseClaude) openWhenReady();
     },
 
     userTyped() {

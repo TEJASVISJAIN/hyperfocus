@@ -1,3 +1,4 @@
+import { LESSON_ASK } from './quiz-prompt.js';
 import { renderRecap } from './recap.js';
 import { BLUE, BOLD, CYAN, DIM, GREEN, INDENT, INVERSE, MAGENTA, RED, RESET, YELLOW, stripColor } from './styles.js';
 import { truncate, widthOf, wrap } from './text-layout.js';
@@ -158,6 +159,12 @@ export function createFocusView({
     if (feedback.saved) return;
     const isCorrect = question.kind === 'predict' ? null : feedback.chosen === question.answer;
     feedback.saved = onSave({ question, chosen: feedback.chosen, correct: isCorrect, thread: [...followUp.thread] }) !== false;
+  }
+
+  // After a wrong answer, once per question: a short lesson on the idea behind it.
+  function canAskLesson(question) {
+    if (!feedback || question.kind === 'predict' || feedback.chosen === question.answer || followUp.pendingAsk !== null || !onFollowUp) return false;
+    return !followUp.thread.some((turn) => turn.ask === LESSON_ASK);
   }
 
   function askFollowUp(ask) {
@@ -350,6 +357,7 @@ export function createFocusView({
       if (feedback) {
         if (key === 'w' && onSave) return save(question);
         if (key === 'f' && followUp.pendingAsk === null) return void (followUp.draft = '');
+        if (key === 'e' && canAskLesson(question)) return askFollowUp(LESSON_ASK);
         return next();
       }
       if (arrow) return void (selected = (selected + arrow + question.options.length) % question.options.length);
@@ -381,6 +389,8 @@ export function createFocusView({
               ...(question.file ? { file: question.file } : {}),
               ...(question.anchor ? { anchor: question.anchor } : {}),
               ...(question.tags?.length ? { tags: [...question.tags] } : {}),
+              ...(question.plan ? { plan: question.plan } : {}),
+              ...(question.repeat ? { repeat: true } : {}),
             }
           : null,
         queued: Math.max(0, queue.length - 1),
@@ -391,6 +401,7 @@ export function createFocusView({
               answer: isPredict ? null : question.answer,
               why: isPredict ? null : question.why,
               saved: Boolean(feedback.saved),
+              lesson: canAskLesson(question),
             }
           : null,
         thread: [...followUp.thread.map(({ ask, answer }) => ({ ask, answer })), ...(followUp.pendingAsk !== null ? [{ ask: followUp.pendingAsk, answer: null }] : [])],
@@ -444,6 +455,10 @@ export function createFocusView({
           askFollowUp(ask);
           return 'ok';
         }
+        case 'lesson':
+          if (!question || !canAskLesson(question)) return 'ignored';
+          askFollowUp(LESSON_ASK);
+          return 'ok';
         case 'keepGoing':
           if (!finished) return 'ignored';
           keepGoing();
@@ -570,7 +585,8 @@ export function createFocusView({
     if (!feedback) return [['↑↓', 'choose'], ['enter', 'answer'], ['s', 'skip'], ['b', 'bad question'], ...live, ...quiet, ...back];
     const save = !onSave ? [] : feedback.saved ? [['✓', 'saved']] : [['w', 'save']];
     if (followUp.pendingAsk !== null) return [...save, ['any key', 'next question'], ...back];
-    return [['f', 'ask a follow-up'], ...save, ['any key', 'next question'], ...live, ...back];
+    const lesson = canAskLesson(question) ? [['e', 'explain the idea']] : [];
+    return [...lesson, ['f', 'ask a follow-up'], ...save, ['any key', 'next question'], ...live, ...back];
   }
 
   function renderFinished({ margin, inner }, cols) {
@@ -594,7 +610,8 @@ export function createFocusView({
     if (!question) return [margin + DIM + idleText + RESET, ''];
 
     const label = KIND_LABELS[question.kind] ?? '';
-    const heading = BOLD + `Question ${seen + 1}` + RESET + (label ? DIM + ' · ' + RESET + CYAN + label + RESET : '');
+    const heading =
+      BOLD + `Question ${seen + 1}` + RESET + (label ? DIM + ' · ' + RESET + CYAN + label + RESET : '') + (question.repeat ? DIM + ' · missed before' + RESET : '');
     const body = [...wrap(question.q, inner).map((line) => BOLD + line + RESET), '', ...renderCode(question, inner)];
 
     question.options.forEach((option, index) => {

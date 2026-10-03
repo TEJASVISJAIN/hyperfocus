@@ -97,7 +97,7 @@ function liveHtml(model) {
       ? `<div class="feedback ${model.feedback.tone}"><b>${escape(model.feedback.verdict)}</b>${model.feedback.why ? `<p>${escape(model.feedback.why)}</p>` : ''}</div>`
       : '';
     const thread = model.thread
-      .map(({ ask, answer }) => `<div class="thread"><b>You asked:</b> ${escape(ask)}<br>${answer === null ? '<span class="muted">Thinking…</span>' : escape(answer)}</div>`)
+      .map(({ ask, answer, lesson }) => `<div class="thread">${lesson ? '<b>The idea behind it</b>' : `<b>You asked:</b> ${escape(ask)}`}<br>${answer === null ? '<span class="muted">Thinking…</span>' : escape(answer)}</div>`)
       .join('');
     const followUp = c.followUp
       ? `<form class="follow-up" data-act="followUp" hidden><input name="ask" placeholder="What would you like to know?" autocomplete="off" maxlength="500"><button type="submit">Ask</button></form>`
@@ -108,7 +108,7 @@ function liveHtml(model) {
       actions = `<div class="banner">${escape(model.status.text)}.</div><div class="row">${button('keepGoing', 'Keep answering')}${button('back', 'Done', 'secondary')}</div>`;
     } else if (model.feedback) {
       actions = `<div class="row">${c.next ? button('next', model.queued ? 'Next question' : 'Done') : ''}${c.save ? button('save', 'Save', 'secondary') : model.feedback.saved ? '<span class="muted saved">Saved ✓</span>' : ''}</div>
-        <p class="links">${c.followUp ? '<a href="#" data-toggle="follow-up">Ask a follow-up</a>' : ''}${c.followUp && c.rate ? ' · ' : ''}${c.rate ? link('rate', 'Not a good question') : ''}</p>`;
+        <p class="links">${[c.lesson ? link('lesson', 'Explain the idea') : '', c.followUp ? '<a href="#" data-toggle="follow-up">Ask a follow-up</a>' : '', c.rate ? link('rate', 'Not a good question') : ''].filter(Boolean).join(' · ')}</p>`;
     } else {
       actions = `<p class="links">${c.skip ? link('skip', 'Skip') : ''}${c.skip && c.rate ? ' · ' : ''}${c.rate ? link('rate', 'Not a good question') : ''}</p>`;
     }
@@ -118,7 +118,8 @@ function liveHtml(model) {
       : q.source?.plan
         ? `About the plan for “${escape(q.source.plan)}”`
         : '';
-    const topics = q.topics?.length ? `<span class="topics">${q.topics.map((t) => `<span class="topic">${escape(t)}</span>`).join('')}</span>` : '';
+    const chips = [...(q.repeat ? ['missed before'] : []), ...(q.topics ?? [])];
+    const topics = chips.length ? `<span class="topics">${chips.map((t) => `<span class="topic">${escape(t)}</span>`).join('')}</span>` : '';
     body = `<div class="live-card" data-id="${q.id}">
       <div class="kind">${escape(kind)}${topics}</div>
       ${where ? `<div class="source">${where}</div>` : ''}
@@ -278,7 +279,7 @@ const SCRIPT = `
     const ask = input?.value.trim();
     if (ask) { send({ type: 'followUp', ask }); input.value = ''; }
   });
-  // 1-9 answer, Enter next, s skip, w save, f follow-up: the same keys as the terminal.
+  // 1-9 answer, Enter next, s skip, w save, f follow-up, e the idea: the same keys as the terminal.
   document.addEventListener('keydown', (event) => {
     if (event.target.closest?.('input, textarea, button, a') || event.metaKey || event.ctrlKey || event.altKey) return;
     const has = (selector) => live.querySelector(selector);
@@ -287,6 +288,7 @@ const SCRIPT = `
     else if (event.key === 's' && has('[data-act="skip"]')) send({ type: 'skip' });
     else if (event.key === 'w' && has('[data-act="save"]')) send({ type: 'save' });
     else if (event.key === 'f' && has('.follow-up')) showFollowUp(true);
+    else if (event.key === 'e' && has('[data-act="lesson"]')) send({ type: 'lesson' });
     else return;
     event.preventDefault();
   });

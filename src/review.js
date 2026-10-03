@@ -9,7 +9,7 @@ const QUIT_KEYS = new Set(['q', '\x03', '\x1b']);
  * `hyperfocus --review`: asks again the questions you missed in this project, but only those whose
  * code is still there. Questions about changes that were reverted or rewritten never come back.
  */
-export async function runReview({ claudePath, config, cwd = process.cwd() }) {
+export async function runReview({ claudePath, config, writer = undefined, cwd = process.cwd() }) {
   const due = missedStillInCode({ cwd });
   if (due.length === 0) {
     process.stdout.write('Nothing to review: no missed questions about code that is still in this project.\n');
@@ -18,7 +18,8 @@ export async function runReview({ claudePath, config, cwd = process.cwd() }) {
 
   const { stdin, stdout } = process;
   const history = createHistory();
-  const engine = claudePath ? createQuizEngine({ claudePath, model: config.model }) : null;
+  // The configured writer answers follow-ups and lessons: with Ollama, nothing leaves the machine.
+  const engine = writer ? createQuizEngine({ claudePath: writer.path, writer: writer.adapter, model: writer.model }) : claudePath ? createQuizEngine({ claudePath, model: config.model }) : null;
   let reviewed = 0;
   let right = 0;
 

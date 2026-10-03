@@ -396,6 +396,41 @@ test('while a VS Code panel is on screen, the terminal stays on the agent and th
   await focus.exited;
 });
 
+test('a watching panel gets the first question within seconds of the prompt, before any edit, whatever the terminal delay', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
+  const focus = startFocus([], { home, env: { HYPERFOCUS_DELAY_MS: '60000', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });
+  await focus.nextReport('start');
+  let [session] = listSessions(join(home, 'sessions'));
+  for (let waited = 0; !session && waited < 3000; waited += 50) {
+    await pause(50);
+    [session] = listSessions(join(home, 'sessions'));
+  }
+  const socket = connect(session.endpoint);
+  let received = '';
+  socket.setEncoding('utf8');
+  socket.on('data', (chunk) => (received += chunk));
+  socket.write(JSON.stringify({ type: 'watching', visible: true }) + '\n');
+  await pause(100);
+
+  const promptAt = Date.now();
+  focus.terminal.write('hook 0 UserPromptSubmit\r');
+  const states = () => received.split('\n').filter(Boolean).map((line) => JSON.parse(line)).filter((message) => message.type === 'state');
+  for (let waited = 0; !states().some((state) => state.question) && waited < 5000; waited += 50) await pause(50);
+  const first = states().find((state) => state.question);
+  assert.ok(first, 'the panel has a question');
+  assert.ok(Date.now() - promptAt < 5000, `after ${Date.now() - promptAt}ms`);
+  assert.equal(first.question.plan, 'add retry to token refresh', 'about the plan for the prompt');
+
+  focus.terminal.write('hook 0 Stop\r');
+  for (let waited = 0; !existsSync(join(home, 'runs.jsonl')) && waited < 3000; waited += 50) await pause(50);
+  const [run] = readFileSync(join(home, 'runs.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.ok(Number.isFinite(run.firstQuestionMs) && run.firstQuestionMs < 5000, 'time to first question is recorded');
+
+  socket.destroy();
+  focus.terminal.write('exit 0\r');
+  await focus.exited;
+});
+
 test('the first time the quiz opens, an intro explains the keys, once', async () => {
   const home = mkdtempSync(join(tmpdir(), 'focus-home-'));
   const focus = startFocus([], { home, firstRun: true, env: { HYPERFOCUS_DELAY_MS: '100', HYPERFOCUS_CLAUDE_BIN: fakeClaudeWithQuiz } });

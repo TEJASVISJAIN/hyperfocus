@@ -13,7 +13,12 @@ behaviour, why this approach. This extension puts those questions in your editor
 - **Questions in the sidebar while your agent works.** Click an answer or press `1`–`9`. You see
   right away whether you were right, and why. The terminal stays on your agent; if the sidebar is
   closed, hyperfocus asks there instead.
+- **The first question within seconds of your prompt,** before the agent has edited anything:
+  hyperfocus learns your project in the background and asks about the plan for your prompt first.
+- **Every question says where it comes from:** the file and lines, or the plan for your prompt.
 - **Next, Save, or ask a follow-up** about the answer. Skip or flag a bad question with one click.
+- **Got one wrong?** *Explain the idea* gives a short lesson using your own code, and the question
+  comes back a day, three days and a week later until it sticks.
 - **Jump to the code.** Click the question's file to open it at the lines the question is about.
 - **Gutter marks.** Lines you've been quizzed on get a green or red dot. Hover it for the question.
 - **Review staged changes.** The 🎓 button in the Source Control view quizzes you on your own staged
@@ -48,7 +53,11 @@ of three on Claude Haiku. [What it costs](https://tejasvisjain.github.io/hyperfo
 | `hyperfocus.gutterMarks` | on | the green and red marks beside lines you were quizzed on |
 | `hyperfocus.home` | `~/.hyperfocus` | where hyperfocus keeps its data |
 
-The live view needs hyperfocus 0.7.0 or later. With an older one the panel says so.
+The live view needs hyperfocus 0.7.0 or later (lessons, repeats and plan sources: 1.0.0). With an
+older one the panel says so.
+
+**Cursor, Windsurf and other Open VSX editors (experimental):** install `ddalus.hyperfocus` from
+[Open VSX](https://open-vsx.org/extension/ddalus/hyperfocus).
 
 ## Developing
 
@@ -59,6 +68,8 @@ tested automatically; before a release, check them by hand in VS Code with the n
 - [ ] Start from the panel (one agent, several, none; hyperfocus installed and not): no prompts
 - [ ] Sidebar open: the terminal stays on the agent and the question appears in the panel; sidebar closed: the terminal asks
 - [ ] Answer by click and by `1`–`9`; Next, Save, follow-up, skip, not a good question
+- [ ] A wrong answer offers Explain the idea (also `e`), once; the lesson shows as "The idea behind it"
+- [ ] A question before any edit says "About the plan for …" with the right prompt
 - [ ] Agent finishes mid-question: notification, Keep answering, Done
 - [ ] Click the question's file: the right lines open, highlighted
 - [ ] Gutter marks appear after answering, follow edits, hide with the setting

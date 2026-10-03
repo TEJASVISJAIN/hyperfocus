@@ -12,8 +12,14 @@ import { buildHookSettings } from '../hook-settings.js';
  *   env: (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv,
  *   parse: (stdout: string) => { text: string, isError: boolean } | null,
  *   input?: (systemPrompt: string, prompt: string) => string,
+ *   streamText?: (stdout: string) => string,
+ *   warm?: boolean,
+ *   request?: (call: { systemPrompt: string, prompt: string, model: string | null, env: NodeJS.ProcessEnv, signal: AbortSignal, onText: (text: string) => void }) => Promise<{ text: string, isError: boolean } | null>,
  *   defaultModel: string | null,
  * }} QuestionWriter
+ * `streamText` reads the reply written so far from partial output, so questions can show before
+ * the reply ends. `warm` says a process may be started before its prompt is known: it waits for
+ * stdin without calling the model. `request` replaces the process with an HTTP call (Ollama).
  * @typedef {{
  *   id: string,
  *   name: string,
@@ -42,10 +48,15 @@ export const claudeAgent = {
     // A lean one-shot Claude: no tools, no MCP, no hooks, no saved session, and our own system prompt.
     // Cutting the default context this way makes each call roughly 70x cheaper. The user's settings
     // files still load, because that is where auth such as apiKeyHelper lives.
+    // stream-json both ways: the reply arrives as it is written, and a process started early waits
+    // for its prompt (plain stdin gives up after 3s), so start-up can be paid before it is needed.
     args: (systemPrompt, model) => [
       '-p',
       ...(model ? ['--model', model] : []),
-      '--output-format', 'json',
+      '--input-format', 'stream-json',
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--include-partial-messages',
       '--tools', '',
       '--no-session-persistence',
       '--setting-sources', 'user,project,local',
@@ -55,14 +66,28 @@ export const claudeAgent = {
     ],
     // Haiku thinks for ~3k tokens by default here, which turned a 6s batch into 30s.
     env: (env) => ({ ...env, MAX_THINKING_TOKENS: '0' }),
+    input: (systemPrompt, prompt) => JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } }) + '\n',
     parse: (stdout) => {
-      try {
-        const { result, is_error: isError } = JSON.parse(stdout);
-        return { text: String(result ?? ''), isError: Boolean(isError) };
-      } catch {
-        return null;
-      }
+      const result = jsonLines(stdout).findLast((line) => line?.type === 'result');
+      return result ? { text: String(result.result ?? ''), isError: Boolean(result.is_error) } : null;
     },
+    streamText: (stdout) =>
+      jsonLines(stdout)
+        .filter((line) => line?.type === 'stream_event' && line.event?.delta?.type === 'text_delta')
+        .map((line) => String(line.event.delta.text ?? ''))
+        .join(''),
+    warm: true,
     defaultModel: 'haiku',
   },
 };
+
+// Complete lines only: the last one may still be arriving.
+function jsonLines(stdout) {
+  return stdout.split('\n').flatMap((line) => {
+    try {
+      return [JSON.parse(line)];
+    } catch {
+      return [];
+    }
+  });
+}

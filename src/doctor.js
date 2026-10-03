@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join } from 'node:path';
+import { checkOllama } from './agents/ollama.js';
 import { launchCommand } from './launch.js';
 import { probeQuestionWriter } from './quiz-engine.js';
 
@@ -71,7 +72,29 @@ const onPath = (name, env) =>
   });
 
 /** The checks `hyperfocus --doctor` runs, against the real machine. */
-export function defaultChecks({ claudePath, config, problems, dataDir, env = process.env, stdout = process.stdout, stdin = process.stdin }) {
+export function defaultChecks({ claudePath, config, problems, dataDir, ollama = null, env = process.env, stdout = process.stdout, stdin = process.stdin }) {
+  // With writer "ollama", questions come from Ollama: it is checked instead of `claude -p`.
+  const questions = ollama
+    ? [
+        { name: 'ollama', run: () => checkOllama({ model: ollama.model, env }) },
+        {
+          name: 'questions',
+          run: async () => {
+            const { ok, detail } = await probeQuestionWriter({ claudePath: '', writer: ollama.adapter, model: ollama.model, env });
+            return ok ? { status: 'ok', detail } : { status: 'fail', detail, hint: 'questions are written by Ollama; check `ollama run ' + ollama.model + '` works' };
+          },
+        },
+      ]
+    : [
+        {
+          name: 'questions',
+          run: async () => {
+            if (!claudePath) return { status: 'skip', detail: 'skipped: no claude' };
+            const { ok, detail } = await probeQuestionWriter({ claudePath, model: config.model, env });
+            return ok ? { status: 'ok', detail } : { status: 'fail', detail, hint: 'questions are written with `claude -p`; check that it works in this shell' };
+          },
+        },
+      ];
   return [
     { name: 'node', run: () => checkNode() },
     {
@@ -127,13 +150,6 @@ export function defaultChecks({ claudePath, config, problems, dataDir, env = pro
         return { status: 'ok', detail: `${dataDir} is writable` };
       },
     },
-    {
-      name: 'questions',
-      run: async () => {
-        if (!claudePath) return { status: 'skip', detail: 'skipped: no claude' };
-        const { ok, detail } = await probeQuestionWriter({ claudePath, model: config.model, env });
-        return ok ? { status: 'ok', detail } : { status: 'fail', detail, hint: 'questions are written with `claude -p`; check that it works in this shell' };
-      },
-    },
+    ...questions,
   ];
 }

@@ -258,3 +258,22 @@ test('short-run projects also stop waiting for a second edit after 30 seconds', 
   mock.timers.tick(30_000);
   assert.deepEqual(calls, ['open focus']);
 });
+
+test('a question already written is something to quiz on: the quiz opens at the delay without an edit', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  mock.timers.tick(3000);
+  policy.questionsReady();
+  assert.deepEqual(calls, [], 'still not before the delay: quick replies never interrupt');
+  mock.timers.tick(5000);
+  assert.deepEqual(calls, ['open focus']);
+});
+
+test('a question that arrives after the delay opens the quiz at once', () => {
+  const { policy, calls } = setup({ switchOn: 'edit' });
+  policy.agentEvent(busy);
+  mock.timers.tick(12_000);
+  assert.deepEqual(calls, []);
+  policy.questionsReady();
+  assert.deepEqual(calls, ['open focus']);
+});

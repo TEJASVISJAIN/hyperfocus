@@ -31,6 +31,21 @@ Every argument is passed through to `claude`: `hyperfocus --continue`, `hyperfoc
 and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus steps aside and runs
 `claude` directly.
 
+### Where it runs
+
+| | Status |
+| --- | --- |
+| macOS, Linux | supported, tested in CI on every change |
+| Claude Code | supported |
+| VS Code | supported ([extension](#vs-code)) |
+| Cursor, Windsurf and other Open VSX editors | experimental: the same extension, from Open VSX |
+| Windows | experimental: see below |
+| Codex CLI, Gemini CLI | experimental: see [Other agents](#other-agents-experimental) |
+| Local question writer (Ollama) | supported, see [Keep code on your machine](#keep-code-on-your-machine) |
+
+Experimental means it is built and tested against stand-ins, not yet on real installs by enough people.
+Reports are welcome either way.
+
 **Linux:** installing compiles one native dependency (`node-pty`), so you need `python3`, `make` and a
 C++ compiler (`sudo apt install build-essential python3` on Debian/Ubuntu). macOS needs nothing extra.
 
@@ -81,6 +96,7 @@ not against the real CLIs yet. Please open an issue if a quiz never appears.
 | `z` `z` | focus view | quiet for the rest of this session: no more automatic quizzes (`Ctrl-]` still opens one) |
 | `l` | focus view | show or hide the live view: what Claude is doing right now |
 | `f` | after an answer | ask your own follow-up question; Enter to send, Esc to cancel |
+| `e` | after a wrong answer | explain the idea behind the question, with your own code as the example |
 | `Enter` / `c` | when Claude finishes mid-question | go back to Claude / keep going with the quiz |
 | any key | after an answer or on the recap | continue |
 
@@ -94,9 +110,29 @@ Keys you press in the focus view never reach Claude.
 - **Predict:** "Which file will Claude edit next?" You lock in a guess, carry on with the quiz, and
   Claude's next edit settles it.
 
-Code shown with a question is checked against the diff, so it is always code Claude really wrote. The
-options are shuffled, so the right answer's position gives nothing away. Questions get harder when you
-keep getting them right and easier when you don't.
+Questions are short: one idea, two lines at most, options of a few words. Each says where it comes
+from: a file and lines, or, before the agent has edited anything, the plan for your prompt ("To add
+retry to token refresh, …"). Code shown with a question is checked against the diff, so it is always
+code Claude really wrote. The options are shuffled, so the right answer's position gives nothing away.
+Questions get harder when you keep getting them right and easier when you don't.
+
+- **Missed one?** Press **`e`** for a short lesson on the idea behind it, using your own code as the
+  example. Follow-ups (`f`) stay on the question's topic.
+- **Spaced repeats.** A question you got wrong comes back a day later, then after three days and a
+  week if you get it right, mixed in with new questions (at most one per batch) and only while its code
+  is still there. A miss starts it over.
+
+**On time.** The first question can come within seconds of your prompt, before the agent has edited
+anything:
+
+- When hyperfocus starts in a project, it writes a short **project brief** in the background (from the
+  README, CLAUDE.md or AGENTS.md, build manifests, the folder tree, recent commit subjects and the
+  files you have changed) and keeps it until the repository moves on. Every question call includes it.
+- Question calls run in an **empty folder**, so they don't load your project's CLAUDE.md or the agent's
+  memory: questions are about your code, not the agent's notes.
+- The reply is **streamed**: the first question shows while the rest are still being written.
+- The next question call is **started early** and waits for its prompt, so the CLI's start-up time is
+  paid in the background. If it isn't needed, it is closed without ever calling the model.
 
 The focus view also shows **Claude's plan** (from its task list) as one line under the status bar.
 Press **`l`** for the **live view**: a feed of what the agent is reading, editing and running, and a peek
@@ -116,7 +152,9 @@ itself; set `"live": true` in the config to always start with it open.
   It never blocks a push, and `--uninstall-hook` removes exactly what it added.
 - **`hyperfocus --stats`** shows how you are doing: accuracy over all time and the last 30 days, per
   question kind, in this project, the concepts you miss most (every question is tagged, for example
-  `concurrency` or `error-handling`), and your streak of days in a row.
+  `concurrency` or `error-handling`), and your streak of days in a row. It also shows **time to first
+  question**: the median wait after a prompt, and how many runs had a question before the agent
+  finished. It is measured on your machine and never sent anywhere.
 
 All three leave out changes that are no longer in the code. If you had Claude build X, then changed your
 mind and had it build Y instead, the questions and notes about X don't come back. Each question and each
@@ -126,7 +164,7 @@ was reverted or rewritten, so hyperfocus leaves it out.
 ## When it switches
 
 - **To the focus view:** once the agent has been busy for 8 seconds and there is something to ask about:
-  its first edit, or a plan of two or more steps. A plan of three or more steps halves the wait. In a
+  a question already written, its first edit, or a plan of two or more steps. A plan of three or more steps halves the wait. In a
   project whose runs are usually short, it waits for a second edit. After 30 seconds it opens anyway,
   edit or not, with questions about the code the agent is reading. It never switches while you are
   typing. So a quick answer, or a run that only reads code, never interrupts you. The first time, an
@@ -140,6 +178,8 @@ was reverted or rewritten, so hyperfocus leaves it out.
     were away" card shows first.
 - If you switch back to Claude yourself (`Ctrl-]` or `Esc`), hyperfocus stays out of the way until your
   next prompt.
+- **While the VS Code panel is on screen,** the terminal stays on the agent and questions go to the
+  panel the moment they exist.
 
 ## Options
 
@@ -154,6 +194,7 @@ was reverted or rewritten, so hyperfocus leaves it out.
 | `--saved` | | print the questions you saved in this project (`--all` for every project), then exit |
 | `--notes` | | print notes on the latest session in this project, then exit |
 | `--review` | | ask again the missed questions whose code is still here (`--md`: print them as a checklist) |
+| `--writer ollama` | config | write questions with a local model through Ollama for this run (see below) |
 | `--staged` | | questions about your staged change (`git diff --cached`), answered in the VS Code panel; no agent needed |
 | `--install-hook` / `--uninstall-hook` | | add or remove the `pre-push` hook that lists them before a push |
 | `HYPERFOCUS_DELAY_MS` | `8000` | how long the agent must be busy before the focus view opens (beats the config file) |
@@ -177,6 +218,8 @@ was reverted or rewritten, so hyperfocus leaves it out.
   "switchOn": "edit",
   "quiet": false,
   "animations": true,
+  "writer": "auto",
+  "ollamaModel": "qwen2.5-coder:7b",
   "projects": {
     "/Users/you/code/scratch": { "quiet": true }
   }
@@ -189,6 +232,22 @@ was reverted or rewritten, so hyperfocus leaves it out.
 - `projects` overrides any setting for one project folder.
 
 A bad value is reported when hyperfocus starts, and that setting keeps its default.
+
+The config file, the data files in `~/.hyperfocus` and the VS Code bridge are stable within 1.x:
+settings and fields are only ever added. They are described in
+[`docs/FORMATS.md`](docs/FORMATS.md).
+
+### Keep code on your machine
+
+```sh
+ollama pull qwen2.5-coder:7b
+hyperfocus --writer ollama          # or "writer": "ollama" in the config
+```
+
+With the Ollama writer, questions, follow-ups, lessons and the project brief are written by a model on
+your machine (`OLLAMA_HOST` if it runs elsewhere; `ollamaModel` picks the model). Your agent is
+unchanged: it still talks to its own provider. `hyperfocus --doctor` checks that Ollama is running and
+the model is pulled. Local models write plainer questions than Haiku, and on a laptop they are slower.
 
 
 ## VS Code
@@ -205,13 +264,17 @@ code --install-extension ddalus.hyperfocus
   stay in step.
 - **Jump to the code.** Click the question's file to open it at the lines the question is about.
 - **Gutter marks.** Lines you were quizzed on get a green or red dot; hover for the question.
-- **Notebook.** Saved questions in a tree by project and topic.
+- **Your progress** (accuracy, saved and missed questions) folds away while a question is up.
 - **Review staged changes.** A button in the Source Control view quizzes you on your own staged diff
   before you commit (`hyperfocus --staged`), with no agent running.
 - **Status bar and a notification** when the agent finishes.
 
 The extension follows a session through `~/.hyperfocus/sessions/` and a local socket only your user
-can open; it never calls a model itself. The live view needs hyperfocus 0.7.0 or later.
+can open; it never calls a model itself. The live view needs hyperfocus 0.7.0 or later; lessons,
+repeats and plan sources need 1.0.0.
+
+In Cursor, Windsurf and other editors that use Open VSX, install `ddalus.hyperfocus` from there
+(experimental).
 
 ## How it works
 
@@ -224,10 +287,12 @@ can open; it never calls a model itself. The live view needs hyperfocus 0.7.0 or
 - **One terminal.** Claude runs in a pseudo-terminal that hyperfocus owns. The focus view is drawn on the
   alternate screen. Claude's output is held back while the quiz is up and replayed exactly when you
   return, so Claude's screen comes back intact.
-- **Questions.** A one-shot `claude -p --model haiku` call reads your prompt, the files Claude looked at,
-  the diffs it wrote and the code around them, and returns a summary plus multiple-choice questions. That call has no tools,
-  no MCP, none of your hooks and no thinking, which keeps it to about 6 seconds and $0.003. It asks again
-  on the first change, after every 3 new edits, or when you run out of questions.
+- **Questions.** A one-shot `claude -p --model haiku` call reads the project brief, your prompt, the
+  files Claude looked at, the diffs it wrote and the code around them, and streams back multiple-choice
+  questions and a summary. That call runs in an empty folder and has no tools, no MCP, none of your
+  hooks and no thinking, which keeps it to a few seconds and about $0.003. It is first made at your
+  prompt, again on the first change, after every 3 new edits, or when you run out of questions. The
+  brief costs one more small call per repository each time HEAD moves.
 - **Follow-ups.** After an answer, press `f` and ask anything about it ("why not a circuit breaker?").
   The same lean Haiku call answers in a few sentences, using the diff, the question and your earlier
   follow-ups as context. It runs beside question generation and never blocks it.
@@ -239,8 +304,11 @@ Diagrams, sequences, state machines and design decisions are in `docs/ARCHITECTU
 ## Privacy
 
 The quiz model sees what the main agent already sees: your prompt, file paths, the diffs Claude wrote
-(up to about 20KB per run), and up to 100 lines of the code around its latest edits. It goes through your own Claude Code login, the same as Claude itself.
-Nothing is sent anywhere else.
+(up to about 20KB per run), up to 100 lines of the code around its latest edits, and the project brief.
+The brief is written from your README, CLAUDE.md or AGENTS.md, build manifests, a folder tree and recent
+commit subjects, each size-capped. It goes through your own Claude Code login, the same as Claude
+itself. Nothing is sent anywhere else, and with `--writer ollama` nothing leaves your machine for
+questions at all.
 
 Before anything is stored, shown or sent, well-known token formats (Anthropic, OpenAI, GitHub, AWS,
 Slack, npm, JWTs, private keys) and secret-looking assignments (`DB_PASSWORD=…`, `"apiKey": "…"`) are

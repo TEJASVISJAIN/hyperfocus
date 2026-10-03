@@ -27,6 +27,8 @@ test('without a config file, the defaults apply', () => {
     quiet: false,
     animations: true,
     agent: 'claude',
+    writer: 'auto',
+    ollamaModel: 'qwen2.5-coder:7b',
   });
 });
 

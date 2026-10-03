@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { createHistory, missedStillInCode, readStats, readInsights, recentAccuracy, recentBadQuestions, formatStats } from '../src/history.js';
+import { createHistory, dueRepeats, missedStillInCode, readStats, readInsights, recentAccuracy, recentBadQuestions, formatStats } from '../src/history.js';
 
 const focusBin = fileURLToPath(new URL('../bin/hyperfocus.js', import.meta.url));
 const question = { q: 'Why retry?', options: ['a', 'b', 'c'], answer: 1, why: 'w' };
@@ -24,7 +24,7 @@ test('each answer is appended as one JSON line, creating the folder on demand', 
   assert.deepEqual(
     { ...first, ts: undefined },
     {
-      ts: undefined, cwd: '/repo', sessionId: 's1', source: 'live', kind: 'why', question: 'Why retry?', options: ['a', 'b', 'c'], answer: 1,
+      v: 1, ts: undefined, cwd: '/repo', sessionId: 's1', source: 'live', kind: 'why', question: 'Why retry?', options: ['a', 'b', 'c'], answer: 1,
       why: 'w', chosen: 2, correct: false, skipped: false, files: ['src/auth.ts'],
     },
   );
@@ -207,4 +207,51 @@ test('insights: accuracy all time and lately, per kind, weakest concepts, this p
   assert.match(text, /state\s+1 of 3 right/);
   assert.match(text, /this project\s+2 of 6 right/);
   assert.match(text, /streak\s+3 days/);
+});
+
+test('a missed question comes back a day, then three days, then a week later, and a miss starts it over', () => {
+  const path = join(tempDir(), 'history.jsonl');
+  const anchor = { file: 'src/retry.ts', anchors: ['export async function withRetry(fn) {'] };
+  const readFile = () => 'export async function withRetry(fn) {\n';
+  const day = (n) => Date.parse('2026-10-01T09:00:00Z') + n * 24 * 3600_000;
+  const lines = [];
+  const answer = (at, correct) => lines.push(JSON.stringify({ v: 1, ts: new Date(at).toISOString(), cwd: '/repo', source: 'live', kind: 'why', question: 'Why retry?', options: ['a', 'b', 'c'], answer: 1, why: 'w', anchor, chosen: correct ? 1 : 0, correct, skipped: false, files: [] }));
+  const due = (at) => {
+    writeFileSync(path, lines.join('\n') + '\n');
+    return dueRepeats({ cwd: '/repo', path, now: at, readFile }).map((question) => question.q);
+  };
+
+  answer(day(0), false);
+  assert.deepEqual(due(day(0.9)), [], 'not the same day');
+  assert.deepEqual(due(day(1)), ['Why retry?'], 'a day later');
+  answer(day(1), true);
+  assert.deepEqual(due(day(3.9)), []);
+  assert.deepEqual(due(day(4)), ['Why retry?'], 'then three days later');
+  answer(day(4), false);
+  assert.deepEqual(due(day(4.5)), [], 'a miss starts again');
+  assert.deepEqual(due(day(5)), ['Why retry?'], 'from one day');
+  answer(day(5), true);
+  answer(day(8), true);
+  assert.deepEqual(due(day(14.9)), []);
+  assert.deepEqual(due(day(15)), ['Why retry?'], 'then a week');
+  answer(day(15), true);
+  assert.deepEqual(due(day(60)), [], 'learnt');
+});
+
+test('a repeat is ready to ask, marked as one, and never about code that is gone', () => {
+  const path = join(tempDir(), 'history.jsonl');
+  const history = createHistory({ path });
+  const where = { cwd: '/repo', sessionId: 's', files: [] };
+  history.append({ question: { ...question, q: 'Still here?', anchor: { file: 'src/a.ts', anchors: ['export const kept = computeKept();'] } }, chosen: 0, correct: false, skipped: false }, where);
+  history.append({ question: { ...question, q: 'Gone?', anchor: { file: 'src/a.ts', anchors: ['export const removed = oldThing();'] } }, chosen: 0, correct: false, skipped: false }, where);
+  const later = Date.now() + 2 * 24 * 3600_000;
+  const due = dueRepeats({ cwd: '/repo', path, now: later, readFile: () => 'export const kept = computeKept();' });
+  assert.deepEqual(due.map((entry) => [entry.q, entry.repeat, entry.options[entry.answer]]), [['Still here?', true, 'b']]);
+});
+
+test('entries from older and newer versions are read alike: unknown fields are ignored', () => {
+  const path = join(tempDir(), 'history.jsonl');
+  const base = { ts: new Date().toISOString(), cwd: '/repo', kind: 'why', question: 'Why?', options: ['a', 'b'], answer: 1, why: 'w', skipped: false, files: [] };
+  writeFileSync(path, [JSON.stringify({ ...base, chosen: 1, correct: true }), JSON.stringify({ ...base, v: 7, chosen: 0, correct: false, someFutureField: { nested: true } })].join('\n') + '\n');
+  assert.deepEqual(readStats(path), [{ cwd: '/repo', answered: 2, correct: 1, skipped: 0 }]);
 });

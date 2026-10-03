@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0
+
+- **Questions sooner:** they appear the moment hyperfocus has written them, often within seconds of
+  your prompt and before the agent has edited anything. Needs hyperfocus 1.0.0.
+- **Where each question comes from:** the file and lines, or "About the plan for" the prompt it was
+  asked for, even after you've moved on to another prompt.
+- **Explain the idea** after a wrong answer (or press `e`): a short lesson using your own code.
+- **Missed before:** questions you got wrong come back on a schedule and are marked as repeats.
+- Published on Open VSX for Cursor, Windsurf and other editors (experimental).
+- The bridge protocol is stable within 1.x and documented in hyperfocus's `docs/FORMATS.md`.
+
 ## 0.2.0
 
 - **Questions in the sidebar:** while your agent works, the question about its change appears in the

@@ -10,7 +10,13 @@ export const SAMPLES = {
     command: { hook_event_name: 'PostToolUse', session_id: 's', tool_name: 'Bash', tool_input: { command: 'npm test' } },
     stop: { hook_event_name: 'Stop', session_id: 's' },
     needsInput: { hook_event_name: 'Notification', session_id: 's', message: 'Claude needs your permission to use Bash' },
-    writerOutput: JSON.stringify({ type: 'result', is_error: false, result: '{"summary": "s", "questions": []}' }),
+    // `claude -p --output-format stream-json --verbose --include-partial-messages`, trimmed from a real run.
+    writerOutput: [
+      '{"type":"system","subtype":"init","cwd":"/tmp/x","session_id":"s"}',
+      '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\"summary\\": \\"s\\", "}}}',
+      '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\\"questions\\": []}"}}}',
+      '{"type":"result","subtype":"success","is_error":false,"result":"{\\"summary\\": \\"s\\", \\"questions\\": []}"}',
+    ].join('\n'),
   },
   // From Codex's hooks docs (learn.chatgpt.com/docs/hooks) and `codex exec --json`; not yet captured from a real run.
   codex: {

@@ -650,6 +650,8 @@ Wrapping refreshToken() in withRetry: 3 attempts.
     <div class="cost-notes reveal">
       <p><strong>Your agent costs the same as before.</strong> hyperfocus doesn't add anything to its context or its prompts; it only listens to its hooks.</p>
       <p><strong>With Codex or Gemini and no Claude Code,</strong> the agent writes the questions with its own default model on your plan. That is a larger model than Haiku, so each question costs more.</p>
+      <p><strong>Learning your project</strong> is one more call of about the same size, once per repository each time its HEAD moves; it is cached in between. The warm next call costs nothing: if it isn't needed it is closed before it sends anything. Question calls no longer carry your project's CLAUDE.md or your agent's memory, so each one is smaller than before.</p>
+      <p><strong>With a local model</strong> (<code>--writer ollama</code>), questions cost nothing and your code never leaves your machine; they are plainer than Haiku's, and slower on a laptop.</p>
       <p><strong>Reviewing a staged change</strong> (<code>--staged</code>, or the button in VS Code) is one batch: about $0.004.</p>
       <p><strong>Free to use:</strong> <code>--stats</code>, <code>--notes</code>, the recap and the pre-push list all come from your local history. <code>--review</code> re-asks saved questions without a call; only follow-ups there use one. <code>--doctor</code> makes one test call.</p>
       <p><strong>To spend less:</strong> set <code>"questionsPerBatch"</code> lower in <code>~/.hyperfocus/config.json</code>, press <kbd>z</kbd> <kbd>z</kbd> to go quiet for a session, or run <code>hyperfocus --no-auto</code> and open the quiz yourself with <kbd>Ctrl-]</kbd>.</p>

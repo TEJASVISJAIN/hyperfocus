@@ -189,13 +189,13 @@ test('the connection comes back after the bridge restarts', async () => {
 const { anchorRange, controlsFor, finishedNow, gutterMarks, startCommand, findOnPath, resolveInside } = require('./panel-state');
 
 test('controls follow the same rules as the keys', () => {
-  assert.deepEqual(controlsFor(state), { answer: true, skip: true, rate: true, next: false, save: false, followUp: false, keepGoing: false, back: false, exit: true });
+  assert.deepEqual(controlsFor(state), { answer: true, skip: true, rate: true, next: false, save: false, followUp: false, lesson: false, keepGoing: false, back: false, exit: true });
   const answered = { ...state, feedback: { chosen: 0, correct: true, answer: 0, why: 'x', saved: false } };
-  assert.deepEqual(controlsFor(answered), { answer: false, skip: false, rate: true, next: true, save: true, followUp: true, keepGoing: false, back: false, exit: true });
+  assert.deepEqual(controlsFor(answered), { answer: false, skip: false, rate: true, next: true, save: true, followUp: true, lesson: false, keepGoing: false, back: false, exit: true });
   assert.equal(controlsFor({ ...answered, feedback: { ...answered.feedback, saved: true } }).save, false);
   assert.equal(controlsFor({ ...answered, thread: [{ ask: 'why?', answer: null }] }).followUp, false, 'one follow-up at a time');
   const finished = { ...state, agent: { ...state.agent, finished: true } };
-  assert.deepEqual(controlsFor(finished), { answer: true, skip: true, rate: false, next: false, save: false, followUp: false, keepGoing: true, back: true, exit: false });
+  assert.deepEqual(controlsFor(finished), { answer: true, skip: true, rate: false, next: false, save: false, followUp: false, lesson: false, keepGoing: true, back: true, exit: false });
   assert.deepEqual(Object.entries(controlsFor({ ...state, question: null })).filter(([, on]) => on).map(([name]) => name), ['exit'], 'back to the agent, like Esc, is always there');
   assert.equal(liveModel(state, { agent: 'staged' }).controls.exit, false, 'a staged review has no agent');
 });
@@ -379,4 +379,23 @@ test('while a session runs, your progress folds away under the question', () => 
   const some = { answered: 3, correct: 1, last30: { answered: 3, correct: 1 }, streak: 1, weakSpots: [], missed: [], saved: [{ question: 'Kept?', options: ['a'], answer: 0, chosen: 0, correct: true }] };
   assert.match(dashboardHtml(some, { running: true }), /^<details class="folded"><summary>Your progress · 3 answered, 33% right<\/summary>/);
   assert.doesNotMatch(dashboardHtml(some, { running: false }), /class="folded"/, 'unfolded when nothing runs');
+});
+
+test('after a miss the card offers the idea behind the question, and labels it as that', () => {
+  const missed = { ...state, feedback: { chosen: 0, correct: false, answer: 1, why: 'w', saved: false, lesson: true } };
+  assert.equal(controlsFor(missed).lesson, true);
+  assert.equal(controlsFor({ ...missed, thread: [{ ask: 'why?', answer: null }] }).lesson, false, 'not while an answer is pending');
+  const html = liveHtml(liveModel(missed));
+  assert.match(html, /data-act="lesson"[^>]*>Explain the idea/);
+  const taught = liveModel({ ...missed, feedback: { ...missed.feedback, lesson: false }, thread: [{ ask: 'Teach me the idea behind this question.', answer: 'A race.' }] });
+  assert.match(liveHtml(taught), /The idea behind it<\/b><br>A race\./);
+  assert.doesNotMatch(liveHtml(taught), /data-act="lesson"/);
+});
+
+test('a plan question names its own prompt, and a repeat says it was missed before', () => {
+  const plan = { ...state, run: { ...state.run, prompt: 'a later prompt' }, question: { ...state.question, file: undefined, anchor: undefined, plan: 'add retry to token refresh', repeat: true } };
+  const model = liveModel(plan);
+  assert.deepEqual(model.question.source, { plan: 'add retry to token refresh' });
+  assert.match(liveHtml(model), /About the plan for “add retry to token refresh”/);
+  assert.match(liveHtml(model), /<span class="topic">missed before<\/span>/);
 });

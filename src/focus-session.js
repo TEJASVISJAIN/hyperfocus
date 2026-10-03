@@ -10,7 +10,9 @@ import { colorAllowed } from './styles.js';
 // `redraw` is called whenever what the focus view shows may have changed; `onBack` when the user
 // asks to go back to Claude from the "Claude finished" prompt, `onExit` when they leave the focus view
 // with Esc (or Enter while no question is up). `projectAccuracy` is how the user
-// did in this project before, which sets how hard the first questions are.
+// did in this project before, which sets how hard the first questions are. `brief` is the project
+// brief (or null while it isn't ready); `dueRepeats` the missed questions due to be asked again,
+// one of which joins each batch.
 export function createFocusSession({
   claudePath,
   redraw,
@@ -24,6 +26,10 @@ export function createFocusSession({
   writer = { path: claudePath, adapter: agent.writer, model: config.model }, // who writes the questions
   projectAccuracy = { answered: 0, correct: 0 },
   badQuestions = () => [],
+  brief = () => null,
+  dueRepeats = () => [],
+  onQuestions = () => {}, // new questions are ready to answer
+  onReplyDone = () => {}, // the question writer finished a reply (whether or not it had questions)
 }) {
   const log = createActivityLog();
   let missedThisRun = []; // wrong answers in the current run, for the "worth a look" checklist
@@ -38,7 +44,10 @@ export function createFocusSession({
       correct: projectAccuracy.correct + view.score.correct,
     }),
     avoid: badQuestions,
+    brief,
   });
+  const repeated = new Set(); // questions already asked again this session
+  let newInReply = { reply: 0, count: 0 }; // new questions so far in the reply being read
   let keepGoing = false; // chose to carry on with the quiz after Claude finished
   const view = createFocusView({
     agentName: agent.name,
@@ -72,13 +81,29 @@ export function createFocusSession({
   }
 
   function runEnded() {
-    engine.cancel();
+    engine.idle();
     view.expirePredictions();
   }
 
   engine.on('batch', (batch) => {
+    const { run } = log;
+    // Time to first question, for --stats: the moment one exists, whatever screen shows it.
+    if (run && !run.firstQuestionAt && batch.questions.length) run.firstQuestionAt = Date.now();
     if (batch.summary) view.setSummary(batch.summary);
     view.addQuestions(batch.questions);
+    if (newInReply.reply !== batch.reply) newInReply = { reply: batch.reply, count: 0 };
+    newInReply.count += batch.questions.length;
+    // At the end of a reply, one missed question due again joins its new ones.
+    if (batch.final) {
+      const hadNew = newInReply.count > 0;
+      const again = hadNew && safely(dueRepeats).find((question) => !repeated.has(question.q));
+      if (again) {
+        repeated.add(again.q);
+        view.addQuestions([again]);
+      }
+    }
+    if (batch.questions.length) onQuestions();
+    if (batch.final) onReplyDone();
     redraw();
   });
 
@@ -143,6 +168,14 @@ export function createFocusSession({
       return outcome;
     },
   };
+}
+
+function safely(read) {
+  try {
+    return read() ?? [];
+  } catch {
+    return [];
+  }
 }
 
 function activityLabel(event) {

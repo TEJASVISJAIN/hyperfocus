@@ -6,6 +6,7 @@ const { join, relative, isAbsolute, posix, win32 } = require('node:path');
 /** The bridge protocol this extension speaks (hyperfocus's src/bridge.js BRIDGE_PROTOCOL). */
 const PROTOCOL = 1;
 const MIN_CLI = '0.7.0';
+const LESSON_ASK = 'Teach me the idea behind this question.'; // as the CLI sends it (quiz-prompt.js)
 
 const AGENT_NAMES = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', staged: 'Your staged change' };
 const agentName = (id) => AGENT_NAMES[id] ?? 'The agent';
@@ -88,6 +89,7 @@ function controlsFor(state) {
     next: Boolean(feedback && !finished),
     save: Boolean(feedback && !feedback.saved && !finished),
     followUp: Boolean(feedback && !pending && !finished),
+    lesson: Boolean(feedback?.lesson && !pending && !finished), // after a wrong answer, once
     keepGoing: finished && Boolean(question),
     back: finished,
     exit: !finished, // Esc in the terminal: back to the agent, whatever is up
@@ -133,11 +135,13 @@ function liveModel(state, { agent: agentId = 'claude', lines = null } = {}) {
           q: question.q,
           code: question.code ?? '',
           file: question.file ?? question.anchor?.file ?? '',
-          // Where the question comes from: lines of a file, or (before any edit) the agent's plan.
+          // Where the question comes from: lines of a file, or (before any edit) the plan for the
+          // prompt it names (older CLIs don't say which: the run's prompt then).
           source: (question.file ?? question.anchor?.file)
             ? { file: question.file ?? question.anchor.file, lines }
-            : { plan: shortPrompt(state.run?.prompt) },
+            : { plan: shortPrompt(question.plan ?? state.run?.prompt) },
           topics: question.tags ?? [],
+          repeat: Boolean(question.repeat),
           options: question.options.map((text, index) => ({ key: String(index + 1), text, mark: mark(index) })),
         }
       : null,
@@ -146,7 +150,8 @@ function liveModel(state, { agent: agentId = 'claude', lines = null } = {}) {
         ? { verdict: 'Locked in: settled by the next edit', tone: 'muted', why: feedback.why ?? '', saved: Boolean(feedback.saved) }
         : { verdict: feedback.correct ? 'Right' : 'Not quite', tone: feedback.correct ? 'good' : 'bad', why: feedback.why ?? '', saved: Boolean(feedback.saved) }
       : null,
-    thread: state.thread ?? [],
+    // The lesson after a miss is asked like a follow-up; it reads better labelled as what it is.
+    thread: (state.thread ?? []).map((item) => ({ ...item, lesson: item.ask === LESSON_ASK })),
     queued: state.queued ? `${state.queued} more question${state.queued === 1 ? '' : 's'} waiting` : '',
     score: state.score?.answered ? `${state.score.correct} of ${state.score.answered} right this run` : '',
     quiet: Boolean(state.quiet),

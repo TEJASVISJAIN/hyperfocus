@@ -148,7 +148,9 @@ flowchart TB
     recap --> anchors
     history --> anchors
     notes --> anchors
-    session --> engine[quiz-engine.js<br/>cadence + subprocess]
+    session --> engine[quiz-engine.js<br/>cadence, stream, warm call]
+    app --> brief[project-brief.js<br/>background brief, cached]
+    brief --> engine
     session --> view[focus-view.js<br/>render + keys]
     engine --> prompt[quiz-prompt.js<br/>prompt + parser]
     view --> recap
@@ -178,12 +180,14 @@ flowchart TB
 | `src/agents/` | one adapter per agent (Claude, Codex, Gemini): find it, attach hooks to a launch, payload → events, question writer | `agent-adapters.test.js` (shared contract), `agents-codex-gemini.test.js`, end-to-end tests with fake agents |
 | `src/launch.js` | start a path without a shell: `.js` with node, Windows `.cmd` shims as node + script | `launch.test.js` |
 | `src/demo/` | `--demo`: the stand-in agent and its throwaway folders | end-to-end PTY test |
-| `src/notes.js` | run log (`runs.jsonl`, with durations), `--notes`, the Markdown checklist, the median run length | `notes.test.js` |
+| `src/notes.js` | run log (`runs.jsonl`, with durations and time to first question), `--notes`, the Markdown checklist, the median run length, `--stats` timing | `notes.test.js` |
 | `src/review.js` | the `--review` screen | by hand (see below) |
 | `src/staged.js` | `--staged`: `git diff --cached` → edit events → one batch, served over the bridge; ends when answered, ended, left or empty | `staged.test.js` (stub model, fake panel, a real temp repo) |
-| `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; question kinds, grounding and validation; shuffling; difficulty | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
+| `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the writer process, run from an empty folder; reading the streamed reply question by question; the warm next call; question kinds, length limits, sources, grounding and validation; shuffling; difficulty; follow-ups and lessons | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
+| `src/project-brief.js` | the project brief: sources gathered with caps and redaction, one writer call, cached per repository root and HEAD (per folder for a day outside git) | `project-brief.test.js` (temp git repos, stub model) |
+| `src/agents/ollama.js` | the local question writer: Ollama's streaming `/api/chat`; the `--doctor` check | `ollama.test.js` (a fake Ollama server) |
 | `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist; `snapshot()` and `act()`, the same state and actions as plain data | `focus-view*.test.js`, `recap.test.js` |
-| `src/history.js` | append answers (with tags and ratings); `--stats` and its insights; recent accuracy; bad questions to avoid; missed questions still in the code | `history.test.js` |
+| `src/history.js` | append answers (with tags and ratings); `--stats` and its insights; recent accuracy; bad questions to avoid; missed questions still in the code; spaced repeats due now | `history.test.js` |
 | `src/alert.js`, `debug-log.js`, `cli-args.js`, `claude-binary.js`, `spawn-helper-permissions.js` | small utilities | indirectly |
 
 ### Event vocabulary
@@ -305,16 +309,37 @@ sequenceDiagram
     S->>Q: update(run, {queuedQuestions})
     alt call in flight, run finished, or nothing to go on
         Q-->>S: (no-op)
-    else first diff, or 3 new edits, or queue empty and something changed
-        Q->>M: spawn with HYPERFOCUS_CHILD=1, MAX_THINKING_TOKENS=0,<br/>--tools "" --strict-mcp-config, disableAllHooks
-        M-->>Q: JSON envelope with result text (often a fenced JSON block)
-        alt reply is not valid JSON
+    else the prompt, first diff, 3 new edits, or queue empty and something changed
+        Q->>M: the warm process if one waits, else spawn in an empty folder:<br/>HYPERFOCUS_CHILD=1, MAX_THINKING_TOKENS=0, --tools "" --strict-mcp-config,<br/>disableAllHooks, stream-json in and out
+        Q->>M: one stream-json user message: brief + prompt + diffs + context
+        loop text deltas
+            M-->>Q: partial reply
+            Q->>Q: each question object closed so far → validate → shuffle → source
+            Q-->>S: emit batch {summary: '', questions: [one]}
+        end
+        M-->>Q: result line
+        alt nothing readable and nothing streamed
             Q->>M: retry once
         end
-        Q->>Q: drop malformed questions, remember asked ones
-        Q-->>S: emit batch
+        Q-->>S: emit batch {summary, questions not yet emitted}
+        Q->>M: start the next process now; it waits for stdin without calling the model
     end
+    Note over Q,M: run ends / idle 5 min: the warm process's stdin is closed and it is killed, unused
 ```
+
+Why stream-json for input too: with plain stdin, `claude -p` gives up after 3 s without data ("no stdin
+data received in 3s"), so a process can't be started before its prompt is known. With
+`--input-format stream-json` it waits; measured on Claude Code 2.1.288, a warm process answered 0.7 s
+after its prompt against 1.4 s cold.
+
+The **project brief** is built once per repository and HEAD, in the background from the session's
+start. A prompt checks HEAD (one `git rev-parse`) and rebuilds when it moved; questions never wait for
+it. The first call of a run is made at the prompt, with the brief, and asks about the plan for that
+prompt; each such question carries the prompt as its `plan` source.
+
+**Spaced repeats.** When a reply's last batch arrives with new questions, the session adds at most one
+missed question that is due again (`history.dueRepeats`: 1, 3, 7 days) and whose code is still there.
+It is marked `repeat`, so its answer is recorded with `source: "repeat"`.
 
 ### Screen switch mechanics
 
@@ -412,6 +437,7 @@ classDiagram
         Edit[] edits
         string[] commands
         Step[] timeline  "latest 30, for the live feed"
+        number firstQuestionAt  "when its first question existed"
     }
     class Edit {
         string path  "relative to project"
@@ -430,6 +456,8 @@ classDiagram
         string why
         string code  "excerpt, verified against the diff"
         Anchor anchor
+        string plan  "the prompt, for questions about the plan"
+        bool repeat  "asked again on schedule"
     }
     class Anchor {
         string file
@@ -446,7 +474,7 @@ classDiagram
         string ts
         string cwd
         string sessionId
-        string source  "live or review"
+        string source  "live, review, staged or repeat"
         string kind
         string question
         string[] options
@@ -466,6 +494,8 @@ classDiagram
     HistoryEntry *-- Anchor
     Run ..> RunLogEntry : when it ends
 ```
+
+Every file format here is versioned and frozen within 1.x; see [`FORMATS.md`](FORMATS.md).
 
 Size limits keep the quiz call small and cheap: a diff is capped at 4KB per edit and 20KB per
 run, and the **oldest** diffs are dropped first. Every edited file stays listed, with its diff
@@ -618,7 +648,10 @@ Tests sit at eight agreed seams, all behind public interfaces:
 1. **Hook → socket → events:** the real hook script against a real socket.
 2. **Activity log:** fed recorded hook payloads through the same translation the server uses.
 3. **Quiz engine:** against a stub `claude` binary (`test/fixtures/fake-haiku.js`) that records its
-   argv, env and stdin.
+   argv, env, working folder and prompt, speaks stream-json, can pause mid-reply, and logs every
+   process start, so the empty folder, streaming and the warm call (used, or closed unused) are all
+   observable. The **project brief** is tested the same way, against temporary git repositories; the
+   **Ollama writer** against a fake Ollama HTTP server.
 4. **Auto-switch policy:** with `node:test` mock timers.
 5. **Focus view and recap:** rendering as a function of state and size, plus key handling.
 6. **History, `--stats`, `--notes` and the still-in-the-code check:** against temporary files and a
@@ -648,8 +681,12 @@ history with one kept and one discarded question.
 | Panel ↔ hyperfocus | a second socket per session, found through a session file; actions go through the same code as keys | the panel calling the model itself (two quiz engines, two cost stories); a port (firewall prompts, other users on the machine); sending keystrokes (breaks when the intro or a draft is up) |
 | Screen switching | alternate screen + byte replay | always repainting from the mirror (drifts from Claude's own screen model) |
 | Question model | `claude -p --model haiku`, lean flags, no thinking, user settings kept for auth | Anthropic SDK (needs an API key the user may not have); default flags (~21k context tokens, ~30s with thinking) |
-| When to ask again | first diff, every 3 edits, or when the queue is empty | one call per event (cost, noise) |
-| Filling the wait for the first batch | nothing old: the live view (feed and peek), one key away | replaying old missed questions (they may be about a change the user has since abandoned) |
+| When to ask again | the prompt, first diff, every 3 edits, or when the queue is empty | one call per event (cost, noise) |
+| Project knowledge for questions | a cached brief (README, CLAUDE.md/AGENTS.md, manifests, tree, commits) written once per HEAD; question calls run in an empty folder | running the writer in the project (it loaded CLAUDE.md and the agent's memory: ~1,300 tokens, and questions about "your memory notes"); `--bare` (skips the keychain, breaks Pro/Max logins); reading code files in the background (cost grows with the repo) |
+| Getting the first question sooner | stream the reply and emit each question when it closes; keep the next process warm | smaller batches (more start-ups); a long-lived conversation process (would carry earlier runs' context) |
+| Repeats | spaced 1/3/7 days, at most one per batch, only while the code is there | a separate review mode only (people don't run it) |
+| Local model | Ollama's HTTP API as a writer that replaces the process | bundling a model; llama.cpp directly (setup burden) |
+| Filling the wait for the first batch | a question at the prompt, from the prompt and the brief; the live view one key away; due repeats join new questions, never replace them | replaying old missed questions on their own (they may be about a change the user has since abandoned; repeats are checked against the code) |
 | Live view on screen | hidden by default, `l` toggles, `"live": true` to start open | always on (noise under every question) |
 | Telling kept changes from discarded ones | anchor lines checked against the file on disk | git history (not every project, uncommitted work); asking the user |
 | Answer position | shuffled locally | trusting the model (it favours one slot) |

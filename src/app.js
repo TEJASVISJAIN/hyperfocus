@@ -6,9 +6,10 @@ import { createAutoSwitch, isInterruptKey } from './auto-switch.js';
 import { debugLog } from './debug-log.js';
 import { startEventServer } from './event-server.js';
 import { createFocusSession } from './focus-session.js';
-import { createHistory, recentAccuracy, recentBadQuestions } from './history.js';
+import { createHistory, dueRepeats, recentAccuracy, recentBadQuestions } from './history.js';
 import { createRunLog, medianRunMs } from './notes.js';
 import { exitCodeFor, startClaudeInPty, takeOverTerminal } from './passthrough.js';
+import { createProjectBrief } from './project-brief.js';
 import { buildRecap, reviewChecklist } from './recap.js';
 import { createScreen, peekLines } from './screen.js';
 import { saveQuestion } from './saved.js';
@@ -54,6 +55,9 @@ export async function runFocus(agentPath, agentArgs, options) {
   });
 
   const cwd = process.cwd();
+  // Learnt in the background while the user types their first prompt; questions never wait for it.
+  const brief = createProjectBrief({ cwd, writer });
+  void brief.refresh();
   const history = createHistory();
   const runLog = createRunLog();
   const loggedRuns = new WeakSet();
@@ -74,8 +78,11 @@ export async function runFocus(agentPath, agentArgs, options) {
     config,
     projectAccuracy: recentAccuracy({ cwd }),
     badQuestions: () => recentBadQuestions({ cwd }),
+    brief: brief.get,
+    dueRepeats: () => dueRepeats({ cwd }),
+    onQuestions: () => policy.questionsReady(),
     redraw,
-    onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run) }),
+    onAnswer: (entry, run) => history.append(entry, { cwd, sessionId, files: changedFiles(run), source: entry.question.repeat ? 'repeat' : 'live' }),
     onSave: (entry, run) => saveQuestion(entry, { cwd, files: changedFiles(run) }),
     onBack: () => {
       session.view.hideFinished();
@@ -196,6 +203,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     debugLog('event', JSON.stringify(event).slice(0, 300));
     sessionId = event.sessionId ?? sessionId;
     if (event.type === 'needs-input') lastNeedsInputMessage = event.message;
+    if (event.type === 'busy') void brief.refresh(); // new commits or a branch switch since the last prompt
     session.agentEvent(event);
     if (event.type === 'done') logRun();
     policy.agentEvent(event);

@@ -6,12 +6,18 @@ import { changedFiles } from './activity-log.js';
  * @typedef {{
  *   kind: QuestionKind, q: string, options: string[], answer: number | null, why: string,
  *   file?: string, code?: string, codeMarks?: string[], tags?: string[],
- *   anchor?: { file: string, anchors: string[] }
+ *   anchor?: { file: string, anchors: string[] }, plan?: string, repeat?: boolean
  * }} Question
+ * `plan` is the prompt a question about the agent's plan (asked before any edit) is about.
+ * `repeat` marks a missed question asked again on schedule (see history.js).
  * @typedef {{ summary: string, questions: Question[] }} Batch
  */
 
 const MAX_CODE_LINES = 10;
+// One idea in two lines at most, with options short enough to read at a glance. The prompt asks
+// for less; these are the limits past which a question is dropped.
+export const MAX_QUESTION_CHARS = 180;
+export const MAX_OPTION_CHARS = 90;
 // Below this many answers, accuracy says little about how hard the questions should be.
 const ANSWERS_BEFORE_ADAPTING = 5;
 
@@ -38,8 +44,12 @@ export const SYSTEM_PROMPT =
   'You help a developer stay engaged with the change an AI coding agent is making in their codebase ' +
   'right now, so they understand it when they review it. Reply with only a JSON object, no prose.';
 
-export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined, context = [], avoid = [] } = {}) {
-  const sections = [`The developer asked the agent:\n<request>\n${run.prompt || '(no prompt captured)'}\n</request>`];
+const briefSection = (brief) => `About this project (background only; ask about the request and the changes, not this):\n<project>\n${brief}\n</project>`;
+
+export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 3, accuracy = undefined, context = [], avoid = [], brief = null } = {}) {
+  const sections = [];
+  if (brief) sections.push(briefSection(brief));
+  sections.push(`The developer asked the agent:\n<request>\n${run.prompt || '(no prompt captured)'}\n</request>`);
 
   if (run.reads.length) sections.push(`Files and searches the agent has looked at:\n${bullets(run.reads)}`);
 
@@ -65,9 +75,11 @@ export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 
   sections.push(
     [
       'Write:',
-      '1. "summary": 1-3 plain sentences on what the agent is doing and why, for someone who looked away.',
-      `2. "questions": 1-${count} questions that make the developer think about THIS change. Never syntax or trivia.`,
-      '   If there are no changes yet, ask how the code being read currently works, or what the change will need to handle.',
+      `1. "questions": 1-${count} questions that make the developer think about THIS change. Never syntax or trivia.`,
+      '   If there are no changes yet, ask about the plan for the request: what it will need to handle, what could go',
+      '   wrong, how the code being read works. Such a question names the request, e.g. "To add retry to token refresh, …".',
+      '   One idea per question: at most 120 characters, no preamble. Options of a few words each (at most 8).',
+      '   Ask about the code and the request, never about notes, memory or instructions.',
       '   Each question has a "kind", one of:',
       ...allowedKinds.map((kind) => `   - ${KIND_INSTRUCTIONS[kind]}`),
       '   Each question: {"kind": string, "q": string, "options": [3-4 strings], "answer": 0-based index of the one',
@@ -76,8 +88,9 @@ export function buildQuizPrompt(run, askedQuestions, { kinds = ['why'], count = 
       `   Also "tags": 1-2 of ${CONCEPT_TAGS.join(', ')}: what the question is really about.`,
       '   Make the wrong options plausible.',
       ...difficulty(accuracy),
+      '2. "summary": 1-3 plain sentences on what the agent is doing and why, for someone who looked away.',
       '',
-      'Reply with JSON only: {"summary": string, "questions": [...]}',
+      'Reply with JSON only, questions first: {"questions": [...], "summary": string}',
     ].join('\n'),
   );
 
@@ -126,8 +139,56 @@ export function parseQuizReply(text, { run, kinds = ['why'] }) {
   return { summary: parsed.summary.trim(), questions };
 }
 
+/**
+ * The questions a reply has finished writing so far, in order, before the reply is complete: each
+ * object in the "questions" array once its closing brace has arrived. Validate them with
+ * `questionChecker` before use.
+ * @param {string} text the reply so far
+ * @returns {unknown[]}
+ */
+export function streamedQuestions(text) {
+  const key = text.search(/"questions"\s*:\s*\[/);
+  if (key === -1) return [];
+  const found = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let at = text.indexOf('[', key) + 1; at < text.length; at++) {
+    const char = text[at];
+    if (inString) {
+      if (char === '\\') at++;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '{' || char === '[') {
+      if (depth === 0) start = at;
+      depth++;
+    } else if (char === '}' || char === ']') {
+      if (depth === 0) break; // the end of the array
+      depth--;
+      if (depth === 0 && char === '}') {
+        try {
+          found.push(JSON.parse(text.slice(start, at + 1)));
+        } catch {
+          found.push(null);
+        }
+      }
+    }
+  }
+  return found;
+}
+
+/** Checks one raw question the way `parseQuizReply` does, for questions read from a stream. */
+export function questionChecker({ run, kinds = ['why'] }) {
+  const grounding = groundingFor(run);
+  const allowed = kindsFor(run, kinds);
+  return (raw) => toQuestion(raw, { run, kinds: allowed, grounding });
+}
+
 function toQuestion(raw, { run, kinds, grounding }) {
   if (typeof raw?.q !== 'string' || !isOptionList(raw.options)) return null;
+  if (raw.q.trim().length > MAX_QUESTION_CHARS || raw.options.some((option) => option.length > MAX_OPTION_CHARS)) return null;
   const kind = typeof raw.kind === 'string' && raw.kind in KIND_INSTRUCTIONS ? raw.kind : 'why';
   if (!kinds.includes(kind)) return null;
 
@@ -189,10 +250,26 @@ const bullets = (items) => items.map((item) => `- ${item}`).join('\n');
 
 export const FOLLOW_UP_SYSTEM_PROMPT =
   'You answer a developer\'s follow-up question about a quiz question on the change an AI coding agent ' +
-  'is making in their codebase. Answer in 2-4 plain sentences, grounded in the change shown. No markdown, no preamble.';
+  'is making in their codebase. Answer in 2-4 plain sentences, grounded in the change shown. Stay on the quiz ' +
+  'question\'s topic: if the follow-up wanders off it, answer briefly and bring it back. No markdown, no preamble.';
 
-export function buildFollowUpPrompt(run, { question, chosen, ask, thread }) {
-  const sections = [`The developer asked the agent:\n<request>\n${run?.prompt || '(no prompt captured)'}\n</request>`];
+export const LESSON_SYSTEM_PROMPT =
+  'You give a developer a short lesson after they got a quiz question wrong about the change an AI coding agent ' +
+  'is making in their codebase. Name the idea behind the question, explain it in 3-5 plain sentences using their ' +
+  'own code shown as the example, and say why the right answer follows. No markdown, no preamble.';
+
+export const LESSON_ASK = 'Teach me the idea behind this question.';
+
+/**
+ * The prompt for a follow-up, or for the lesson after a miss (`ask` is then `LESSON_ASK`). Both are
+ * anchored to the question and the code it is about, so the answer doesn't drift.
+ * @param {any} run
+ * @param {{ question: Question, chosen: number | null, ask: string, thread: { ask: string, answer: string }[], context?: { file: string, text: string }[], brief?: string | null }} request
+ */
+export function buildFollowUpPrompt(run, { question, chosen, ask, thread, context = [], brief = null }) {
+  const sections = [];
+  if (brief) sections.push(briefSection(brief));
+  sections.push(`The developer asked the agent:\n<request>\n${run?.prompt || question.plan || '(no prompt captured)'}\n</request>`);
   if (run?.edits.length) {
     sections.push(`Changes (- removed, + added):\n${run.edits.map((edit) => `### ${edit.path}\n${edit.diff}`).join('\n\n')}`);
   }
@@ -208,6 +285,7 @@ export function buildFollowUpPrompt(run, { question, chosen, ask, thread }) {
       `Explanation shown: ${question.why}`,
     ].join('\n'),
   );
+  if (context.length) sections.push('The code the question is about, as it is now:\n' + context.map(({ file, text }) => `<context file="${file}">\n${text}\n</context>`).join('\n'));
   if (thread.length) {
     sections.push(`Earlier follow-ups:\n${thread.map((turn) => `Developer: ${turn.ask}\nYou: ${turn.answer}`).join('\n\n')}`);
   }

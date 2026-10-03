@@ -15,6 +15,7 @@ export function createHistory({ path = defaultHistoryPath() } = {}) {
   return {
     append({ question, chosen, correct, skipped, rating = undefined }, { cwd, sessionId, files, source = 'live' }) {
       const entry = {
+        v: 1,
         ts: new Date().toISOString(),
         cwd,
         sessionId,
@@ -73,24 +74,64 @@ export function missedStillInCode({ cwd, path = defaultHistoryPath(), readFile =
   }
   const due = [];
   for (const entry of [...latest.values()].reverse()) {
-    if (entry.correct !== false || entry.kind === 'predict' || !entry.anchor) continue;
-    // Hand-edited or damaged lines must not reach the screen: it assumes well-formed questions.
-    if (!Array.isArray(entry.options) || entry.options.length < 2 || !entry.options.every(isText)) continue;
-    if (!Number.isInteger(entry.answer) || entry.answer < 0 || entry.answer >= entry.options.length) continue;
-    if (entry.code !== undefined && (!isText(entry.code) || !Array.isArray(entry.codeMarks))) continue;
-    if (!isStillInCode(entry.anchor, { cwd, readFile })) continue;
-    due.push({
-      kind: entry.kind ?? 'why',
-      q: entry.question,
-      options: entry.options,
-      answer: entry.answer,
-      why: isText(entry.why) ? entry.why : '',
-      ...(entry.code ? { code: entry.code, codeMarks: entry.codeMarks } : {}),
-      anchor: entry.anchor,
-    });
+    if (entry.correct !== false) continue;
+    const question = askableAgain(entry, { cwd, readFile });
+    if (question) due.push(question);
     if (due.length === MAX_REVIEW_QUESTIONS) break;
   }
   return due;
+}
+
+// A history entry as a question to ask again, if it can be: well formed (hand-edited or damaged
+// lines must not reach the screen) and about code that is still there.
+function askableAgain(entry, { cwd, readFile }) {
+  if (entry.kind === 'predict' || !entry.anchor) return null;
+  if (!Array.isArray(entry.options) || entry.options.length < 2 || !entry.options.every(isText)) return null;
+  if (!Number.isInteger(entry.answer) || entry.answer < 0 || entry.answer >= entry.options.length) return null;
+  if (entry.code !== undefined && (!isText(entry.code) || !Array.isArray(entry.codeMarks))) return null;
+  if (!isStillInCode(entry.anchor, { cwd, readFile })) return null;
+  return {
+    kind: entry.kind ?? 'why',
+    q: entry.question,
+    options: entry.options,
+    answer: entry.answer,
+    why: isText(entry.why) ? entry.why : '',
+    ...(entry.code ? { code: entry.code, codeMarks: entry.codeMarks } : {}),
+    ...(Array.isArray(entry.tags) ? { tags: entry.tags.filter(isText) } : {}),
+    anchor: entry.anchor,
+  };
+}
+
+const DAY = 24 * 3600_000;
+// After a miss a question comes back a day later; each right answer then waits longer, and after
+// the last step it is learnt. A wrong answer at any step starts again from the first.
+export const REPEAT_AFTER_DAYS = [1, 3, 7];
+
+/**
+ * Missed questions in this project that are due to be asked again now, most overdue first, as
+ * questions ready to ask (marked `repeat`). Only those whose code is still there.
+ */
+export function dueRepeats({ cwd, path = defaultHistoryPath(), now = Date.now(), readFile = undefined }) {
+  const schedule = new Map(); // question → { step, dueAt, entry }
+  for (const entry of readEntries(path)) {
+    if (entry.cwd !== cwd || entry.skipped || typeof entry.question !== 'string' || typeof entry.correct !== 'boolean') continue;
+    const at = Date.parse(entry.ts);
+    if (!Number.isFinite(at)) continue;
+    const current = schedule.get(entry.question);
+    if (entry.correct === false) schedule.set(entry.question, { step: 0, dueAt: at + REPEAT_AFTER_DAYS[0] * DAY, entry });
+    else if (current) {
+      const step = current.step + 1;
+      if (step >= REPEAT_AFTER_DAYS.length) schedule.delete(entry.question);
+      else schedule.set(entry.question, { step, dueAt: at + REPEAT_AFTER_DAYS[step] * DAY, entry: current.entry });
+    }
+  }
+  return [...schedule.values()]
+    .filter(({ dueAt }) => dueAt <= now)
+    .sort((a, b) => a.dueAt - b.dueAt)
+    .map(({ entry }) => askableAgain(entry, { cwd, readFile }))
+    .filter(Boolean)
+    .slice(0, MAX_REVIEW_QUESTIONS)
+    .map((question) => ({ ...question, repeat: true }));
 }
 
 const RECENT_ANSWERS = 20;

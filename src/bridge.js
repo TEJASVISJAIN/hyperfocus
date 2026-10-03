@@ -17,9 +17,11 @@ import { redactSecrets } from './redact.js';
  *   { type: 'stale', id }   the action named a question that is no longer up
  * client → server:
  *   { type: 'answer', id, chosen } | { type: 'skip', id } | { type: 'next', id } | { type: 'save', id }
- *   { type: 'rate', id, rating: 'bad' } | { type: 'followUp', id, ask }
+ *   { type: 'rate', id, rating: 'bad' } | { type: 'followUp', id, ask } | { type: 'lesson', id } (after a wrong answer)
  *   { type: 'keepGoing' } | { type: 'back' } | { type: 'exit' } (Esc: back to the agent) | { type: 'quiet' }
  *   { type: 'watching', visible } — the panel is on screen: while one is, the terminal leaves the quiz to it
+ * Unknown message types and unknown fields are ignored, both ways: within protocol 1, changes only
+ * add. The full description is docs/FORMATS.md.
  */
 export const BRIDGE_PROTOCOL = 1;
 

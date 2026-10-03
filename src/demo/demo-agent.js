@@ -5,7 +5,7 @@
 //   change on a timeline: it fires the hook commands hyperfocus registered (from --settings), the
 //   way Claude Code would, and really writes the files it "edits" into the demo project folder.
 // - With -p, it is the question writer: it reads the prompt and replies with canned questions in
-//   the JSON shape `claude -p --output-format json` uses.
+//   the stream-json shape hyperfocus calls `claude -p` with.
 //
 // HYPERFOCUS_DEMO_SPEED speeds the timeline up (the tests use 10).
 import { exec } from 'node:child_process';
@@ -106,13 +106,24 @@ else if (args.includes('--version')) process.stdout.write('demo agent (stands in
 else startAgent();
 
 function writeQuestions() {
-  let prompt = '';
+  let input = '';
   process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (chunk) => (prompt += chunk));
+  process.stdin.on('data', (chunk) => (input += chunk));
   process.stdin.on('end', () => {
+    if (!input.trim()) return; // a warm writer closed unused
+    let prompt = input;
+    try {
+      prompt = String(JSON.parse(input.split('\n')[0]).message.content); // --input-format stream-json
+    } catch {}
     const system = args[args.indexOf('--system-prompt') + 1] ?? '';
     let result;
-    if (/follow-up/.test(system)) {
+    if (/project brief/.test(system)) {
+      result = 'A small Node service that refreshes auth tokens; src/ holds the client and a new retry helper.';
+    } else if (/lesson/.test(system)) {
+      result =
+        'The idea is backoff: wait longer after each failure so a struggling server gets room to recover. ' +
+        'Here withRetry doubles the wait each attempt, and refresh() in src/auth.ts is what it protects.';
+    } else if (/follow-up/.test(system)) {
       result =
         'withRetry gives up after the last attempt and rethrows, so refresh() in src/auth.ts still sees the real error. ' +
         'The wait doubles each time (200ms, then 400ms), which spreads one client out, but not many clients: that is what jitter adds.';

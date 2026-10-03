@@ -186,3 +186,29 @@ test('f before answering does nothing special', () => {
   assert.match(text(), /enter answer/);
   assert.deepEqual(calls.followUps, []);
 });
+
+test('after a wrong answer, e asks for a lesson on the idea, once; not after a right one', () => {
+  const { view, calls, text, type } = setup();
+  view.addQuestions([retryQuestion, attemptsQuestion]);
+  type('1');
+  assert.match(text(), /e\s+explain the idea/);
+  assert.equal(view.snapshot().feedback?.lesson, true);
+  type('e');
+  assert.equal(calls.followUps.length, 1);
+  assert.match(calls.followUps[0].ask, /idea behind this question/);
+  view.setFollowUpAnswer('A race: two refreshes at once.', retryQuestion);
+  assert.equal(view.snapshot().feedback?.lesson, false, 'one lesson per question');
+  assert.equal(view.act({ type: 'lesson' }), 'ignored');
+
+  type(' '); // next question
+  type('2'); // right
+  assert.equal(view.snapshot().feedback?.lesson, false);
+  assert.doesNotMatch(text(), /explain the idea/);
+});
+
+test('a question asked again on schedule says so', () => {
+  const { view, text } = setup();
+  view.addQuestions([{ ...retryQuestion, repeat: true }]);
+  assert.match(text(), /Question 1 · missed before/);
+  assert.equal(view.snapshot().question?.repeat, true);
+});

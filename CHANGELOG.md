@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0
+
+**Questions on time.**
+
+- **A project brief, learnt in the background.** When hyperfocus starts in a project it writes a short
+  brief from your README, CLAUDE.md or AGENTS.md, build manifests, the folder tree, recent commit
+  subjects and the files you've changed (each size-capped, secrets redacted, sensitive files never
+  read), and caches it until HEAD moves. Every question call includes it.
+- **The first question at your prompt,** about the plan for it, before the agent edits anything. Each
+  such question names the prompt it is about.
+- **Question calls run in an empty folder,** so they no longer load your project's CLAUDE.md or the
+  agent's memory (about 1,300 tokens per call, and the cause of questions about "your memory notes").
+- **Streamed:** the first question shows as soon as it is written.
+- **A warm next call:** the next question process is started early and waits for its prompt, so
+  Claude Code's start-up is paid in the background. If it isn't needed it is closed without calling
+  the model, so it costs nothing.
+- **The terminal opens the quiz once a question is ready,** not only after an edit; a watching VS Code
+  panel gets each question the moment it exists.
+- **`--stats` shows time to first question:** the median wait after a prompt and how many runs had a
+  question before the agent finished. Measured and kept on your machine.
+
+**Questions worth answering.**
+
+- **Shorter:** one idea, two lines at most, options of a few words. Longer ones are dropped.
+- **Always sourced:** a file and lines, or the plan for your prompt; a question with neither is dropped.
+- **Spaced repeats:** a missed question comes back after 1 day, then 3 and 7 days as you get it right,
+  at most one per batch beside new questions, and only while its code is still there.
+- **A lesson after a miss:** press `e` for a short explanation of the idea, with your own code as the
+  example. Follow-ups now stay on the question's topic.
+- **Local model writer:** `--writer ollama` (or `"writer": "ollama"`) writes questions with a model on
+  your machine through Ollama; `--doctor` checks that it runs and the model is pulled.
+
+**Ready for everyone.**
+
+- The bridge protocol, the config file and the data files are versioned, documented in
+  `docs/FORMATS.md`, and only grow within 1.x. New entries carry `"v": 1`.
+- Platform support is stated plainly: macOS, Linux and Claude Code are supported; Windows, Codex CLI,
+  Gemini CLI and Open VSX editors are experimental.
+
 ## 0.7.0
 
 - **Answer in VS Code:** a running session can now be followed and driven by the VS Code extension

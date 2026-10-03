@@ -20,12 +20,15 @@ export function createRunLog({ path = defaultRunsPath() } = {}) {
         files.set(edit.path, anchors);
       }
       const entry = {
+        v: 1,
         ts: new Date().toISOString(),
         cwd,
         sessionId,
         prompt: run.prompt,
         summary,
         ...(run.finishedAt ? { durationMs: run.finishedAt - run.startedAt } : {}),
+        // How long the run waited for its first question; absent when none came before it ended.
+        ...(run.firstQuestionAt ? { firstQuestionMs: run.firstQuestionAt - run.startedAt } : {}),
         files: [...files].map(([file, anchors]) => ({ path: file, anchors: [...anchors] })),
       };
       try {
@@ -71,6 +74,44 @@ export function medianRunMs({ cwd, path = defaultRunsPath() }) {
   if (durations.length === 0) return null;
   const middle = Math.floor(durations.length / 2);
   return durations.length % 2 ? durations[middle] : (durations[middle - 1] + durations[middle]) / 2;
+}
+
+const TIMED_RUNS = 50;
+// Runs shorter than this are quick replies: nobody waits for a question during them.
+export const QUIZ_WORTHY_RUN_MS = 10_000;
+
+/**
+ * Time to first question over the latest runs long enough to quiz on: the median wait, and how many
+ * got a question before the agent finished. Everything stays on this machine.
+ * @returns {{ runs: number, medianMs: number | null, beforeDone: number }}
+ */
+export function readTiming({ path = defaultRunsPath() } = {}) {
+  // Runs logged before 1.0.0 (no "v") never recorded the time, so they would count as never in time.
+  const runs = readRuns(path)
+    .filter((entry) => entry.v >= 1 && Number.isFinite(entry.durationMs) && entry.durationMs >= QUIZ_WORTHY_RUN_MS)
+    .slice(-TIMED_RUNS);
+  const waits = runs.map((entry) => entry.firstQuestionMs).filter((ms) => Number.isFinite(ms) && ms >= 0);
+  const beforeDone = runs.filter((entry) => Number.isFinite(entry.firstQuestionMs) && entry.firstQuestionMs <= entry.durationMs).length;
+  return { runs: runs.length, medianMs: median(waits), beforeDone };
+}
+
+function median(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+/** The `--stats` lines about timing, or none before any run was long enough to count. */
+export function formatTiming({ runs, medianMs, beforeDone }) {
+  if (runs === 0) return '';
+  const seconds = medianMs === null ? 'no questions yet' : `${(medianMs / 1000).toFixed(1)}s median`;
+  return [
+    '  time to first question',
+    `    ${'wait'.padEnd(14)}${seconds}`,
+    `    ${'in time'.padEnd(14)}${beforeDone} of ${runs} runs had a question before the agent finished`,
+    '',
+  ].join('\n');
 }
 
 /** Missed questions whose code is still there, as `- [ ]` items to paste into a pull request. */

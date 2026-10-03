@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { createRunLog, formatChecklist, formatNotes, medianRunMs, readNotes } from '../src/notes.js';
+import { createRunLog, formatChecklist, formatNotes, formatTiming, medianRunMs, readNotes, readTiming } from '../src/notes.js';
 
 const tempPath = () => join(mkdtempSync(join(tmpdir(), 'focus-notes-')), 'runs.jsonl');
 const edit = (path, anchors) => ({ path, diff: '', anchors });
@@ -94,4 +94,27 @@ test('missed questions still in the code become a Markdown checklist', () => {
   assert.equal(formatChecklist([]), '');
   const notes = formatNotes({ runs: [{ prompt: 'p', summary: '', files: ['a.ts'], ts: '' }], leftOut: 0 }, { project: '~/app', checklist: due.slice(0, 1) });
   assert.match(notes, /- `a.ts`\n\n### Worth a look\n\n- \[ \] `src\/retry.ts`/);
+});
+
+test('each run records how long it waited for its first question; --stats shows the median and how many were in time', () => {
+  const path = tempPath();
+  const runs = createRunLog({ path });
+  const timed = (durationMs, firstQuestionMs) => ({ ...run('p', []), startedAt: 1000, finishedAt: 1000 + durationMs, ...(firstQuestionMs === null ? {} : { firstQuestionAt: 1000 + firstQuestionMs }) });
+  runs.append(timed(40_000, 4000), { cwd: '/repo', sessionId: 's', summary: '' });
+  runs.append(timed(20_000, 6000), { cwd: '/repo', sessionId: 's', summary: '' });
+  runs.append(timed(15_000, null), { cwd: '/repo', sessionId: 's', summary: '' }); // none before it ended
+  runs.append(timed(30_000, 35_000), { cwd: '/other', sessionId: 't', summary: '' }); // came after the end
+  runs.append(timed(3000, null), { cwd: '/repo', sessionId: 's', summary: '' }); // a quick reply: not counted
+
+  const [first] = readFileSync(path, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(first.firstQuestionMs, 4000);
+  assert.equal(first.v, 1);
+
+  appendFileSync(path, JSON.stringify({ ts: '2026-01-01T00:00:00Z', cwd: '/repo', sessionId: 'old', prompt: 'p', summary: '', durationMs: 60_000, files: [] }) + '\n');
+  const timing = readTiming({ path });
+  assert.deepEqual(timing, { runs: 4, medianMs: 6000, beforeDone: 2 }, 'a run from before 1.0.0 recorded no time, so it is left out');
+  const text = formatTiming(timing);
+  assert.match(text, /6\.0s median/);
+  assert.match(text, /2 of 4 runs had a question before the agent finished/);
+  assert.equal(formatTiming({ runs: 0, medianMs: null, beforeDone: 0 }), '');
 });

@@ -2,7 +2,7 @@
   "name": "hyperfocus",
   "displayName": "hyperfocus — learn while your AI codes",
   "description": "Answer short questions about your AI agent's change right in VS Code while it works: jump to the code, gutter marks, saved questions, and a review of your staged diff. For Claude Code, Codex and Gemini CLI.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "publisher": "ddalus",
   "license": "MIT",
   "engines": {

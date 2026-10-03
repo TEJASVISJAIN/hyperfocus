@@ -121,7 +121,7 @@ test('answering from a client is the same as the key: feedback, history, and the
   panel.send({ type: 'answer', id: question.id, chosen: 1 });
   const state = await panel.next((message) => isState(message) && message.feedback);
 
-  assert.deepEqual(state.feedback, { chosen: 1, correct: false, answer: 0, why: 'The loop stops one short.', saved: false });
+  assert.deepEqual(state.feedback, { chosen: 1, correct: false, answer: 0, why: 'The loop stops one short.', saved: false, lesson: true });
   assert.deepEqual(state.score, { answered: 1, correct: 0, streak: 0 });
   assert.equal(calls.answers.length, 1);
   assert.equal(calls.answers[0].chosen, 1);
