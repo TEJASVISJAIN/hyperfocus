@@ -1,0 +1,31 @@
+name: Bug report
+description: Something doesn't work the way the docs say it should
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `hyperfocus --doctor`
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: OS, terminal and agent
+      placeholder: macOS 15, iTerm2, Claude Code 2.1.288
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log (optional)
+      description: Run with `HYPERFOCUS_DEBUG=1` and paste the relevant part. Check it for secrets first.
+      render: text

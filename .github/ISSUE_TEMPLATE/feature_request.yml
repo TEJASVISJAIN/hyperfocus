@@ -1,0 +1,15 @@
+name: Idea
+description: Something hyperfocus could do better
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What gets in your way
+      description: The situation and what's hard about it today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help

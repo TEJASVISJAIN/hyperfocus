@@ -13,6 +13,7 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     # Windows support is experimental: its results are reported, but don't fail the build yet.
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
@@ -24,4 +25,5 @@ jobs:
       # node-pty has no Linux prebuilds, so this compiles it there (runners ship python3, make and g++).
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      # A test that hangs fails after a minute, by name, instead of holding the job open.
+      - run: npm test -- --test-timeout=60000

@@ -1,11 +1,21 @@
 # hyperfocus
 
-Stay in hyperfocus while your coding agent works, instead of reaching for your phone.
+[![npm](https://img.shields.io/npm/v/@ddalus/hyperfocus?color=0a7c8c)](https://www.npmjs.com/package/@ddalus/hyperfocus)
+[![VS Code](https://img.shields.io/visual-studio-marketplace/v/ddalus.hyperfocus?label=VS%20Code&color=0a7c8c)](https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus)
+[![CI](https://github.com/TEJASVISJAIN/hyperfocus/actions/workflows/ci.yml/badge.svg)](https://github.com/TEJASVISJAIN/hyperfocus/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-0a7c8c)](LICENSE)
 
-`hyperfocus` runs the real Claude Code. When the agent has been busy for a few seconds, the terminal
-switches to a short quiz about **the change Claude is making right now**: why it's done this way,
-what could break, which edge cases matter. As soon as Claude finishes or needs you, the terminal
-switches back, with a recap of what you missed.
+**Your agent writes the code. hyperfocus makes sure you still understand it.**
+
+`hyperfocus` runs your coding agent (Claude Code, or Codex and Gemini CLI, experimental) in your
+terminal. While it works, the terminal switches to a short quiz about **the change it is making right
+now**: why it's done this way, what could break, which edge cases matter. As soon as the agent
+finishes or needs you, the terminal switches back, with a recap of what you missed.
+
+New in 1.0: the first question arrives seconds after your prompt, questions know your project,
+missed ones come back on a schedule until they stick, and they can be written by a local model
+through Ollama. [Website](https://tejasvisjain.github.io/hyperfocus-web/) ·
+[VS Code extension](#vs-code) · [Changelog](CHANGELOG.md)
 
 ![hyperfocus --demo: while an agent adds retries to token refresh, the quiz asks about the code it just wrote, then hands back with a recap](https://tejasvisjain.github.io/hyperfocus-web/hyperfocus-demo.gif)
 
@@ -25,7 +35,7 @@ hyperfocus                  # use it exactly like `claude`
 There is no separate account, sign-up or API key. hyperfocus runs your own `claude`, both for your
 session and for the small model calls that write the questions, so it uses whatever login Claude Code
 already has: a Claude subscription, an API key, `apiKeyHelper`, or Bedrock/Vertex. The question calls
-count toward your own usage, at about $0.003 per batch.
+count toward your own usage, at about $0.004 per batch.
 
 Every argument is passed through to `claude`: `hyperfocus --continue`, `hyperfocus --model sonnet`,
 and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus steps aside and runs
@@ -290,7 +300,7 @@ In Cursor, Windsurf and other editors that use Open VSX, install `ddalus.hyperfo
 - **Questions.** A one-shot `claude -p --model haiku` call reads the project brief, your prompt, the
   files Claude looked at, the diffs it wrote and the code around them, and streams back multiple-choice
   questions and a summary. That call runs in an empty folder and has no tools, no MCP, none of your
-  hooks and no thinking, which keeps it to a few seconds and about $0.003. It is first made at your
+  hooks and no thinking, which keeps it to a few seconds and about $0.004. It is first made at your
   prompt, again on the first change, after every 3 new edits, or when you run out of questions. The
   brief costs one more small call per repository each time HEAD moves.
 - **Follow-ups.** After an answer, press `f` and ask anything about it ("why not a circuit breaker?").
