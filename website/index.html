@@ -233,6 +233,10 @@ h2 { font-size: var(--step-3); font-weight: 750; letter-spacing: -0.03em; font-s
 .feature p { color: var(--ink-soft); font-size: var(--step--1); }
 .feature code { color: var(--ink); font-size: 0.88em; }
 
+.v1-features { margin-top: 0; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 28px 24px; }
+#v1 .split { align-items: start; }
+#v1 .panel { white-space: pre-wrap; }
+
 /* Keys */
 .keys { margin-top: 36px; border: 1px solid var(--rule); border-radius: 14px; overflow-x: auto; }
 .keys table { width: 100%; border-collapse: collapse; font-size: var(--step--1); min-width: 480px; }
@@ -378,6 +382,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
     <div class="nav-links">
       <a href="#demo">Demo</a>
       <a href="#how">How it works</a>
+      <a href="#v1">New in 1.0</a>
       <a href="#agents">Agents</a>
       <a href="#features">Features</a>
       <a href="#vscode">VS Code</a>
@@ -395,7 +400,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
     <a class="whatsnew" href="#releases" id="whatsnew" hidden><b id="whatsnew-version">new</b><span id="whatsnew-text">See what's new</span> →</a><br>
     <span class="eyebrow"><span class="spin" id="spin">◑</span> <span id="eyebrow-agent">claude</span> is editing src/retry.ts · 0:14</span>
     <h1>Stay in the terminal while <span class="agent-word" id="agent-word">Claude</span> works.</h1>
-    <p class="lede">hyperfocus runs your coding agent for you. Once it starts changing code, your terminal switches to a short quiz about <strong>the change it is making right now</strong>. The moment it finishes, you're switched straight back, with a recap.</p>
+    <p class="lede">hyperfocus runs your coding agent for you. While it works, your terminal switches to a short quiz about <strong>the change it is making right now</strong>, starting with its plan, before it has edited a line. The moment it finishes, you're switched straight back, with a recap.</p>
     <div class="cta">
       <div class="install">
         <span class="prompt">$</span>
@@ -404,7 +409,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
       </div>
       <a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">View on npm ↗</a>
     </div>
-    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>, or <code>hyperfocus codex</code>, or <code>hyperfocus gemini</code>. No account, no API key. <span class="pill"><span class="live"></span><span id="npm-version">on npm</span></span> · MIT · macOS, Linux, Windows (experimental)</p>
+    <p class="meta">Then run <code>hyperfocus</code> instead of <code>claude</code>, or <code>hyperfocus codex</code>, or <code>hyperfocus gemini</code>. No account, no API key. <span class="pill"><span class="live"></span><span id="npm-version">on npm</span></span> · MIT · macOS and Linux, Windows experimental</p>
   </div>
 </header>
 
@@ -427,10 +432,44 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
     <p class="intro">The minutes you spend waiting on an agent are usually spent somewhere else: a feed, a chat, your phone. hyperfocus uses them to walk you through what the agent is doing, so you understand the change before you review it.</p>
     <ol class="reveal flow">
       <li><h3>Run it like claude</h3><p><code>hyperfocus</code> takes every argument <code>claude</code> does and runs the real Claude Code in your terminal. Nothing in your settings changes.</p></li>
-      <li><h3>The agent starts changing code</h3><p>Once it has been busy for 8 seconds <em>and</em> made its first edit or plan, the screen switches to the focus view. Quick answers and runs that only read code never interrupt you.</p></li>
-      <li><h3>Questions about this change</h3><p>A small, cheap model call reads your prompt, the diffs and the code around them, then asks why it's done this way and what could break.</p></li>
+      <li><h3>The agent gets to work</h3><p>The first question is written the moment you send your prompt, about the plan for it. Once the agent has been busy for 8 seconds <em>and</em> a question is ready, the screen switches to the focus view. Quick answers never interrupt you.</p></li>
+      <li><h3>Questions about this change</h3><p>A small, cheap model call reads your prompt, the diffs, the code around them and a short brief of your project, then asks why it's done this way and what could break. Questions stream in as they are written.</p></li>
       <li><h3>Straight back when it's done</h3><p>The moment Claude finishes or needs you, you're back, with a bell and a "while you were away" card listing what changed.</p></li>
     </ol>
+  </div>
+</section>
+
+<section class="block" id="v1">
+  <div class="wrap">
+    <span class="kicker">New in 1.0 <span class="badge" data-since="1.0.0"></span></span>
+    <h2>Questions on time. Questions worth answering.</h2>
+    <p class="intro">The first question now comes while the agent is still planning, knows what your project is, and is short enough to answer at a glance. And the ones you miss come back until they stick.</p>
+    <div class="split">
+      <div class="reveal features v1-features">
+        <div class="feature"><h3>The first question in seconds</h3><p>At your prompt, before anything is edited, you get a question about the plan. Questions stream in: each one shows the moment it is written, not when the whole batch is done. <code>--stats</code> shows your median wait.</p></div>
+        <div class="feature"><h3>It knows your project</h3><p>In the background, hyperfocus writes a short brief from your README, CLAUDE.md or AGENTS.md, manifests, folder tree and recent commits, and keeps it until HEAD moves. Secrets are redacted; <code>.env</code> files are never read.</p></div>
+        <div class="feature"><h3>Short, and always sourced</h3><p>One idea per question, two lines at most, options of a few words. Each one points at its file and lines, or names the prompt it is about. A question with neither is dropped.</p></div>
+        <div class="feature"><h3>Missed questions come back</h3><p>Got one wrong? It returns after 1 day, then after 3 and 7 days as you get it right, one at a time beside the new ones, and only while its code is still there.</p></div>
+        <div class="feature"><h3>Learn the idea, not just the answer</h3><p>After a miss, press <kbd>e</kbd> for a short lesson on the idea behind the question, with your own code as the example.</p></div>
+        <div class="feature"><h3>Keep code on your machine</h3><p><code>hyperfocus --writer ollama</code> writes questions, lessons and the brief with a local model through Ollama. Your agent is unchanged. Local questions are plainer than Haiku's, and slower on a laptop.</p></div>
+      </div>
+      <div class="panel reveal" aria-label="A missed question that came back, and the lesson after it"><span class="t-b">Question 4</span><span class="t-dim"> · </span><span class="t-cyan">why</span><span class="t-dim"> · missed before</span>
+<span class="t-b">Why retry at the call site, not inside fetch()?</span>
+
+<span class="t-dim">src/auth.ts</span>
+<span class="t-green">+ return withRetry(fetchToken, 3);</span>
+
+  1  fetch() can't see the token
+<span class="t-red t-b">✘ 2  Retries are cheaper there</span>
+<span class="t-cyan t-b">▸ 3  Other callers should fail fast</span>
+
+<span class="t-red t-b">✘ Not quite</span><span class="t-dim"> · the answer is 3</span>
+
+<span class="t-b">The idea behind it</span>
+Retry where waiting is worth it. Inside fetch(), every caller would sit through three attempts, even the ones that should fail fast, so withRetry wraps only this one.
+
+<span class="t-dim">e explain the idea · f follow up · w save</span></div>
+    </div>
   </div>
 </section>
 
@@ -453,8 +492,8 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
         <div class="tick done" style="left:88%; --at:5.3s"></div>
       </div>
       <div class="legend">
-        <div><b>reads and plans</b>Nothing changed yet, so it waits. A run that is still exploring after 30 seconds gets questions about the code it is reading.</div>
-        <div><b style="color:var(--term-yellow)">first edit</b>Busy for 8 seconds and something to ask about: the quiz opens. A plan of 3+ steps halves the wait.</div>
+        <div><b>reads and plans</b>A question about the plan is written right away. A run that is still exploring after 30 seconds gets questions about the code it is reading.</div>
+        <div><b style="color:var(--term-yellow)">first edit</b>Busy for 8 seconds and a question ready: the quiz opens. A plan of 3+ steps halves the wait.</div>
         <div><b style="color:var(--focus)">quiz</b>New questions arrive as the diff grows. Never while you're typing.</div>
         <div><b style="color:var(--right)">done</b>Straight back, with a bell and a recap. Runs that are usually short here wait for a second edit.</div>
       </div>
@@ -466,7 +505,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
   <div class="wrap">
     <span class="kicker">Your agent <span class="badge" data-since="0.5.0"></span></span>
     <h2>Bring the agent you already use.</h2>
-    <p class="intro">The same quiz, recap, notes and stats around Claude Code, OpenAI Codex or Google Gemini. Your agent's own settings files are never touched, and if Claude Code is installed, it writes the questions for all three.</p>
+    <p class="intro">The same quiz, recap, notes and stats around Claude Code, OpenAI Codex or Google Gemini. Your agent's own settings files are never touched. If Claude Code is installed, it writes the questions for all three; or a local model can, through Ollama.</p>
     <div class="agents">
       <article class="agent reveal"><h3>Claude Code <span class="status">stable</span></h3><p>Hooks are attached per launch with <code>--settings</code>. Nothing on disk changes.</p><div class="cmd"><span>$</span> hyperfocus</div></article>
       <article class="agent reveal"><h3>Codex <span class="status exp">experimental</span></h3><p>Runs with a mirrored <code>CODEX_HOME</code>: your auth and sessions stay put, and you trust the hook once.</p><div class="cmd"><span>$</span> hyperfocus codex</div></article>
@@ -536,7 +575,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
       <div class="feature"><h3>Notes and review</h3><p><code>hyperfocus --notes</code> writes the session up as markdown for a PR description. <code>hyperfocus --review</code> asks again the questions you missed.</p></div>
       <div class="feature"><h3>Quiet when you need it <span class="badge" data-since="0.3.0"></span></h3><p>Press <kbd>z</kbd> twice for no more quizzes this session, or run <code>hyperfocus --quiet --here</code> to keep one project quiet for good. <kbd>Ctrl-]</kbd> still opens a quiz.</p></div>
       <div class="feature"><h3>Try it, then check it <span class="badge" data-since="0.3.0"></span></h3><p><code>hyperfocus --demo</code> replays a scripted change through the real quiz, with no agent needed. <code>hyperfocus --doctor</code> checks your whole setup, down to one real question.</p></div>
-      <div class="feature"><h3>Your login, your costs</h3><p>No account and no API key. It runs your own <code>claude</code>, so it works with a subscription, an API key, Bedrock or Vertex. A batch of questions costs about $0.003.</p></div>
+      <div class="feature"><h3>Your login, your costs</h3><p>No account and no API key. It runs your own <code>claude</code>, so it works with a subscription, an API key, Bedrock or Vertex. A batch of questions costs about $0.004, or nothing with a local model.</p></div>
       <div class="feature"><h3>Secrets stay out</h3><p>Tokens and passwords in diffs and commands are replaced with <code>[redacted]</code> before anything is stored, shown or sent. <code>.env</code> files and keys are never read.</p></div>
     </div>
   </div>
@@ -548,7 +587,7 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
       <div class="split-copy">
         <span class="kicker" style="margin:0">Getting sharper <span class="badge" data-since="0.3.0"></span></span>
         <h2>See what you keep missing.</h2>
-        <p>Every question is tagged with what it's really about: concurrency, error handling, state, API design. <code>hyperfocus --stats</code> shows your accuracy over the last 30 days, by kind of question and in each project, and <strong>the concepts you miss most</strong>.</p>
+        <p>Every question is tagged with what it's really about: concurrency, error handling, state, API design. <code>hyperfocus --stats</code> shows your accuracy over the last 30 days, by kind of question and in each project, and <strong>the concepts you miss most</strong>. It also shows how long you wait for the first question after a prompt, measured and kept on your machine.</p>
         <p>Press <kbd>b</kbd> on a bad question and it never counts, never comes back, and steers the next ones away from it.</p>
       </div>
       <div class="stats reveal" id="stats-panel" aria-label="Example output of hyperfocus --stats">
@@ -559,6 +598,9 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
         <div class="head">worth studying</div>
         <div class="row"><span>concurrency</span><span class="meter"><i class="weak" data-w="33"></i></span><span class="num">2 of 6</span></div>
         <div class="row"><span>edge-cases</span><span class="meter"><i class="mid" data-w="50"></i></span><span class="num">4 of 8</span></div>
+        <div class="head">time to first question</div>
+        <div class="row"><span>wait</span><span></span><span class="num">3.1s</span></div>
+        <div class="row"><span>in time</span><span class="meter"><i data-w="93"></i></span><span class="num">28 of 30</span></div>
         <div class="streak">streak · 6 days in a row</div>
       </div>
     </div>
@@ -603,6 +645,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
           <tr><td><kbd>s</kbd></td><td>question</td><td>Skip the question</td></tr>
           <tr><td><kbd>b</kbd></td><td>question</td><td>A bad question: skip it unscored, and steer future ones away from it</td></tr>
           <tr><td><kbd>z</kbd> <kbd>z</kbd></td><td>focus view</td><td>Quiet for the rest of this session</td></tr>
+          <tr><td><kbd>e</kbd></td><td>after a miss</td><td>A short lesson on the idea behind the question, with your code as the example</td></tr>
           <tr><td><kbd>f</kbd></td><td>after an answer</td><td>Ask your own follow-up</td></tr>
           <tr><td><kbd>w</kbd></td><td>after an answer</td><td>Save the question, your answer and the explanation to your notebook (<code>hyperfocus --saved</code>)</td></tr>
           <tr><td><kbd>l</kbd></td><td>focus view</td><td>Show or hide the live view</td></tr>
@@ -623,7 +666,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
         <p class="intro">The hyperfocus extension puts the quiz in the sidebar. While hyperfocus runs in your folder, in VS Code's terminal or any other, the panel shows what the agent is doing and the question you're being asked. Click an answer or press <kbd>1</kbd>–<kbd>9</kbd>; the terminal keeps up.</p>
         <ul class="vscode-list reveal">
           <li><strong>Jump to the code.</strong> Click the question's file to open it at the lines it is about.</li>
-          <li><strong>Follow up, save, rate</strong> from the panel, the same as the keys.</li>
+          <li><strong>Explain the idea, follow up, save, rate</strong> from the panel, the same as the keys. Questions you missed before say so.</li>
           <li><strong>Gutter marks.</strong> Green and red dots beside the lines you were quizzed on.</li>
           <li><strong>Review staged changes.</strong> One button in Source Control quizzes you on your own diff before you commit, no agent needed.</li>
           <li><strong>Notebook, stats and weak spots,</strong> and a notification when the agent finishes.</li>
@@ -675,6 +718,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
 <span class="t-cyan">$</span> hyperfocus
 <span class="t-cyan">$</span> hyperfocus --continue
 <span class="t-cyan">$</span> hyperfocus codex        <span class="t-dim"># or gemini</span>
+<span class="t-cyan">$</span> hyperfocus --writer ollama  <span class="t-dim"># questions from a local model</span>
 
 <span class="t-dim"># after a session</span>
 <span class="t-cyan">$</span> hyperfocus --notes
@@ -687,8 +731,8 @@ Wrapping refreshToken() in withRetry: 3 attempts.
       <div class="need">
         <p><strong>You need Node.js 22 or newer and a coding agent, installed and logged in:</strong> Claude Code, Codex or Gemini CLI. If you already use one, you're set.</p>
         <p><strong>Linux:</strong> installing compiles one native dependency, so you need <code>python3</code>, <code>make</code> and a C++ compiler (<code>sudo apt install build-essential python3</code>). macOS needs nothing extra.</p>
-        <p><strong>Windows</strong> is experimental: Windows Terminal with PowerShell, keyboard only for now.</p>
-        <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, which kinds of question, notifications, the mouse, the live view, and quiet mode per project. Every key is optional.</p>
+        <p><strong>Supported:</strong> macOS, Linux and Claude Code. <strong>Experimental:</strong> Windows (Windows Terminal with PowerShell, keyboard only for now), Codex, Gemini CLI, and editors that install from Open VSX.</p>
+        <p><strong>Settings</strong> live in <code>~/.hyperfocus/config.json</code>: how long to wait before the quiz opens, the model, who writes the questions (Claude or a local model), which kinds of question, notifications, the mouse, the live view, and quiet mode per project. Every key is optional, and the format is stable through 1.x.</p>
         <p><a class="btn" href="https://www.npmjs.com/package/@ddalus/hyperfocus" target="_blank" rel="noopener">@ddalus/hyperfocus on npm ↗</a></p>
       </div>
     </div>
