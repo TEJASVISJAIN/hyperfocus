@@ -1,14 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
-- **Panel bridge:** a running session can now be followed and driven by the VS Code panel. Each
-  session writes `~/.hyperfocus/sessions/<pid>.json` and listens on a local socket (a named pipe on
-  Windows) for the panel; answers, follow-ups, saves and ratings from the panel work exactly like the
-  keys. The terminal is unchanged.
-- **VS Code panel, live:** while hyperfocus runs in the window's folder, the panel shows what the agent
-  is doing and the current question, then the feedback once you answer, wherever the terminal is.
-  An older hyperfocus is told to update instead of half-working.
+- **Answer in VS Code:** a running session can now be followed and driven by the VS Code extension
+  (0.2.0). Each session writes `~/.hyperfocus/sessions/<pid>.json` and listens on a local socket (a
+  named pipe on Windows) that only your user can open. Answers, follow-ups, saves and ratings from the
+  panel work exactly like the keys, and the terminal shows them too. The terminal is otherwise
+  unchanged.
+- **`--staged`:** questions about your staged change (`git diff --cached`), with no agent running.
+  The VS Code panel asks them; the extension's "Review staged changes" button starts it. Answers count
+  in `--stats` like any other.
+- Saved questions remember where their code is, so the notebook can open it.
 
 ## 0.6.0
 

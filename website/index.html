@@ -359,6 +359,12 @@ code, kbd, pre, .panel, .stats, .cmd, .install { font-variant-ligatures: none; }
 .cost-notes { margin-top: 28px; display: grid; gap: 10px; max-width: 760px; }
 .cost-notes p { margin: 0; }
 .cost-notes code, .cost-notes kbd { white-space: nowrap; }
+
+.vscode-split { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; }
+.vscode-split > div { flex: 1 1 380px; min-width: 0; }
+.vscode-list { padding-left: 1.1em; line-height: 1.6; }
+.vscode-list li { margin: 6px 0; }
+.vscode-shot { flex: 0 0 auto; max-width: 100%; height: auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.25); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
 </style>
 </head>
 <body>
@@ -610,10 +616,24 @@ Wrapping refreshToken() in withRetry: 3 attempts.
 
 <section class="block" id="vscode">
   <div class="wrap">
-    <span class="kicker">VS Code</span>
-    <h2>Your learning, next to your code.</h2>
-    <p class="intro">The hyperfocus extension adds a sidebar with your streak, how often you're right, your weak spots, every question you saved with <kbd>w</kbd>, and the ones you missed lately. It updates as you answer and starts hyperfocus in a terminal with one click. It only reads <code>~/.hyperfocus</code> on your machine.</p>
-    <p class="reveal"><a class="btn" href="https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus" target="_blank" rel="noopener">Install from the VS Code Marketplace ↗</a> &nbsp; <code>code --install-extension ddalus.hyperfocus</code></p>
+    <span class="kicker">VS Code <span class="badge" data-since="0.7.0"></span></span>
+    <h2>Answer without leaving your editor.</h2>
+    <div class="vscode-split">
+      <div>
+        <p class="intro">The hyperfocus extension puts the quiz in the sidebar. While hyperfocus runs in your folder, in VS Code's terminal or any other, the panel shows what the agent is doing and the question you're being asked. Click an answer or press <kbd>1</kbd>–<kbd>9</kbd>; the terminal keeps up.</p>
+        <ul class="vscode-list reveal">
+          <li><strong>Jump to the code.</strong> Click the question's file to open it at the lines it is about.</li>
+          <li><strong>Follow up, save, rate</strong> from the panel, the same as the keys.</li>
+          <li><strong>Gutter marks.</strong> Green and red dots beside the lines you were quizzed on.</li>
+          <li><strong>Review staged changes.</strong> One button in Source Control quizzes you on your own diff before you commit, no agent needed.</li>
+          <li><strong>Notebook, stats and weak spots,</strong> and a notification when the agent finishes.</li>
+        </ul>
+        <p class="reveal">It never calls a model and only talks to hyperfocus on your machine.</p>
+        <p class="reveal"><a class="btn" href="https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus" target="_blank" rel="noopener">Install from the VS Code Marketplace ↗</a></p>
+        <p class="reveal">or <code>code --install-extension ddalus.hyperfocus</code></p>
+      </div>
+      <img class="vscode-shot reveal" src="vscode-live.gif" width="340" height="560" alt="The hyperfocus panel in VS Code: a live question, the answer and explanation, a follow-up, and a save" loading="lazy">
+    </div>
   </div>
 </section>
 
@@ -630,6 +650,7 @@ Wrapping refreshToken() in withRetry: 3 attempts.
     <div class="cost-notes reveal">
       <p><strong>Your agent costs the same as before.</strong> hyperfocus doesn't add anything to its context or its prompts; it only listens to its hooks.</p>
       <p><strong>With Codex or Gemini and no Claude Code,</strong> the agent writes the questions with its own default model on your plan. That is a larger model than Haiku, so each question costs more.</p>
+      <p><strong>Reviewing a staged change</strong> (<code>--staged</code>, or the button in VS Code) is one batch: about $0.004.</p>
       <p><strong>Free to use:</strong> <code>--stats</code>, <code>--notes</code>, the recap and the pre-push list all come from your local history. <code>--review</code> re-asks saved questions without a call; only follow-ups there use one. <code>--doctor</code> makes one test call.</p>
       <p><strong>To spend less:</strong> set <code>"questionsPerBatch"</code> lower in <code>~/.hyperfocus/config.json</code>, press <kbd>z</kbd> <kbd>z</kbd> to go quiet for a session, or run <code>hyperfocus --no-auto</code> and open the quiz yourself with <kbd>Ctrl-]</kbd>.</p>
       <p style="opacity:.65">Prices are Claude Haiku API list prices on the day we measured; your figures will vary with the size of the change.</p>

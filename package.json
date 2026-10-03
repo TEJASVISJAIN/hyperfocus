@@ -1,6 +1,6 @@
 {
   "name": "@ddalus/hyperfocus",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Stay in hyperfocus while your coding agent works: a quiz and recap about the change Claude Code is making, right in your terminal",
   "keywords": [
     "claude",

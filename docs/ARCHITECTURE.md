@@ -180,6 +180,7 @@ flowchart TB
 | `src/demo/` | `--demo`: the stand-in agent and its throwaway folders | end-to-end PTY test |
 | `src/notes.js` | run log (`runs.jsonl`, with durations), `--notes`, the Markdown checklist, the median run length | `notes.test.js` |
 | `src/review.js` | the `--review` screen | by hand (see below) |
+| `src/staged.js` | `--staged`: `git diff --cached` → edit events → one batch, served over the bridge; ends when answered, ended, left or empty | `staged.test.js` (stub model, fake panel, a real temp repo) |
 | `src/quiz-engine.js` + `quiz-prompt.js` | when to ask the model; the subprocess; question kinds, grounding and validation; shuffling; difficulty | `quiz-engine.test.js` (stub binary), `quiz-prompt.test.js` |
 | `src/focus-view.js` + `recap.js` + `text-layout.js` | pure rendering and key/click handling for the quiz, predictions, plan, feed, peek, recap and checklist; `snapshot()` and `act()`, the same state and actions as plain data | `focus-view*.test.js`, `recap.test.js` |
 | `src/history.js` | append answers (with tags and ratings); `--stats` and its insights; recent accuracy; bad questions to avoid; missed questions still in the code | `history.test.js` |
@@ -496,19 +497,47 @@ sequenceDiagram
 ```
 
 - **Discovery.** Each session writes `sessions/<pid>.json` in the data folder and removes it on exit.
-  A file whose process is gone is ignored and deleted by whoever reads it (`listSessions`).
-- **Transport.** A second local endpoint beside the hook socket (named pipe on Windows), owner-only on
-  Unix. Newline-delimited JSON both ways; any number of clients.
+  A file whose process is gone is ignored; hyperfocus's own `listSessions` also deletes it, the
+  extension only skips it.
+- **Transport.** A second local endpoint: on Unix a socket in a fresh `0700` temp directory (so no
+  other user can connect, even before the socket's own mode is set), a named pipe on Windows.
+  Newline-delimited JSON both ways; any number of clients. A client that sends a line over 64KB is
+  dropped, and a follow-up is cut to 500 characters.
 - **State.** `focus-view` `snapshot()` (question with its id and anchor, feedback, thread, score,
   agent status, finished) plus the run from the session and the quiet flag. The answer and why are
   only sent after the user has answered. Every string goes through `redact.js`. State is sent on
   connect and after every redraw, only when it changed.
-- **Actions.** `answer`, `skip`, `next`, `save`, `rate`, `followUp`, `keepGoing`, `back`, `quiet`,
+- **Actions.** `answer`, `skip`, `next`, `save`, `rate`, `followUp`, `keepGoing`, `back`, `exit` (Esc), `quiet`,
   through `focus-view` `act()`, which shares its code with the keys and follows the same rules (for
   example, only answering, skipping, keep going and back work while "agent finished" is up). An
   action naming a question id that is no longer up gets `{ type: 'stale', id }`.
 - **Versioning.** `protocol` is in the session file and the hello; a client that doesn't know the
   number says which hyperfocus it needs instead of guessing.
+
+### `--staged`
+
+The same bridge with no agent and no terminal UI. The staged diff is parsed into one edit event per
+file (a change per hunk) and replayed into a focus session in one go, so the first question call sees
+the whole change. When the batch arrives the run is closed, so the engine asks nothing more. The
+session file's agent is `staged`; `back` ends the review (there is no agent to go back to). It also
+ends when the user has gone past the last question, when the panel that was following it
+disconnects, or after two minutes with no questions.
+
+### The extension (`vscode/`)
+
+Plain CommonJS, no bundler. Everything that decides something is free of the `vscode` module and
+tested with node:
+
+| Module | Responsibility |
+| --- | --- |
+| `live.js` | finds the session for the window (session files, polled), connects with backoff, refuses unknown protocols, keeps the latest state |
+| `panel-state.js` | session choice; state → live card and controls (the same rules as the keys); status bar text; the "agent finished" edge; anchor → line range (the half-the-lines rule); gutter marks from history; the notebook tree; the start command and PATH lookup |
+| `views.js` | the webview HTML: live card, pinned notebook card and dashboard, each replaced in place by message so scroll, open sections and a half-typed follow-up survive |
+| `data.js` | stats, weak spots, missed and saved questions from the JSONL files |
+| `extension.js` | VS Code wiring only: webview, tree, status bar, decorations, commands, watchers |
+
+The extension never calls a model. The staged review is the CLI started with `--staged`; the panel
+then finds it like any other session.
 
 ## Is it still in the code?
 
@@ -591,7 +620,10 @@ Tests sit at eight agreed seams, all behind public interfaces:
 6. **History, `--stats`, `--notes` and the still-in-the-code check:** against temporary files and a
    stub file reader.
 7. **The panel bridge:** a fake panel client on a real socket against a real focus session (with the
-   stub model for follow-ups): snapshot, actions, staleness, several clients, redaction, session files.
+   stub model for follow-ups): snapshot, actions, staleness, several clients, redaction, session files;
+   and `--staged` the same way, plus once through the real binary in a temporary git repo.
+   On the extension side, its vscode-free modules are tested with node, and its connection is tested
+   against the CLI's real bridge.
 8. **End to end in a PTY:** `hyperfocus` runs inside an outer pseudo-terminal against
    `test/fixtures/fake-claude.js`, which reports what it receives and can run the injected hook
    commands the way Claude Code would.

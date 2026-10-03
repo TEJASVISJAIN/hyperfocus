@@ -154,6 +154,7 @@ was reverted or rewritten, so hyperfocus leaves it out.
 | `--saved` | | print the questions you saved in this project (`--all` for every project), then exit |
 | `--notes` | | print notes on the latest session in this project, then exit |
 | `--review` | | ask again the missed questions whose code is still here (`--md`: print them as a checklist) |
+| `--staged` | | questions about your staged change (`git diff --cached`), answered in the VS Code panel; no agent needed |
 | `--install-hook` / `--uninstall-hook` | | add or remove the `pre-push` hook that lists them before a push |
 | `HYPERFOCUS_DELAY_MS` | `8000` | how long the agent must be busy before the focus view opens (beats the config file) |
 | `HYPERFOCUS_DEBUG=1` | off | log hook events and errors to `~/.hyperfocus/debug.log` |
@@ -192,11 +193,25 @@ A bad value is reported when hyperfocus starts, and that setting keeps its defau
 
 ## VS Code
 
-The [hyperfocus extension](https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus) shows your stats, weak spots and saved questions in a sidebar, and starts hyperfocus in a terminal:
+The [hyperfocus extension](https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus) puts the quiz in the editor:
 
 ```sh
 code --install-extension ddalus.hyperfocus
 ```
+
+- **Answer in the sidebar.** While hyperfocus runs in the window's folder (in VS Code's terminal or
+  any other), the panel shows what the agent is doing and the current question. Click an option or
+  press `1`–`9`; ask a follow-up, save it, or rate it bad, just like the keys in the terminal. Both
+  stay in step.
+- **Jump to the code.** Click the question's file to open it at the lines the question is about.
+- **Gutter marks.** Lines you were quizzed on get a green or red dot; hover for the question.
+- **Notebook.** Saved questions in a tree by project and topic.
+- **Review staged changes.** A button in the Source Control view quizzes you on your own staged diff
+  before you commit (`hyperfocus --staged`), with no agent running.
+- **Status bar and a notification** when the agent finishes.
+
+The extension follows a session through `~/.hyperfocus/sessions/` and a local socket only your user
+can open; it never calls a model itself. The live view needs hyperfocus 0.7.0 or later.
 
 ## How it works
 
