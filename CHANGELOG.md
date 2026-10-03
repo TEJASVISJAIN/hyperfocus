@@ -5,7 +5,10 @@
 - **Panel bridge:** a running session can now be followed and driven by the VS Code panel. Each
   session writes `~/.hyperfocus/sessions/<pid>.json` and listens on a local socket (a named pipe on
   Windows) for the panel; answers, follow-ups, saves and ratings from the panel work exactly like the
-  keys. The terminal is unchanged. The extension side comes in the next release.
+  keys. The terminal is unchanged.
+- **VS Code panel, live:** while hyperfocus runs in the window's folder, the panel shows what the agent
+  is doing and the current question, then the feedback once you answer, wherever the terminal is.
+  An older hyperfocus is told to update instead of half-working.
 
 ## 0.6.0
 

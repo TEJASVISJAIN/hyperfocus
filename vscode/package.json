@@ -1,6 +1,6 @@
 {
   "name": "hyperfocus",
-  "displayName": "hyperfocus \u2014 learn while your AI codes",
+  "displayName": "hyperfocus — learn while your AI codes",
   "description": "See your hyperfocus quiz stats, weak spots and saved questions next to your code. For Claude Code, Codex and Gemini CLI.",
   "version": "0.1.0",
   "publisher": "ddalus",
@@ -98,5 +98,8 @@
   },
   "bugs": {
     "url": "https://github.com/TEJASVISJAIN/hyperfocus-web/issues"
+  },
+  "scripts": {
+    "test": "node test.js && node --test live.test.js"
   }
 }
