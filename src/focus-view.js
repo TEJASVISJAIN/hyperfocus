@@ -26,6 +26,7 @@ const MAX_DOTS = 10;
 const UP_KEYS = new Set(['\x1b[A', '\x1bOA', 'k']);
 const DOWN_KEYS = new Set(['\x1b[B', '\x1bOB', 'j']);
 const MAX_PLAN_CELLS = 10;
+const MAX_ASK_CHARS = 500; // a follow-up from another surface; the terminal's own box is as long as a line
 
 export const INTRO_TITLE = 'Welcome to hyperfocus';
 // Shown the first time the quiz takes the screen, and by `hyperfocus --intro`.
@@ -410,7 +411,7 @@ export function createFocusView({
     act(action) {
       const question = current();
       if (action.id !== undefined && action.id !== (question && ids.get(question))) return 'stale';
-      const blockedByFinished = finished && !['answer', 'skip', 'keepGoing', 'back', 'quiet'].includes(action.type);
+      const blockedByFinished = finished && !['answer', 'skip', 'keepGoing', 'back', 'exit', 'quiet'].includes(action.type);
       if (blockedByFinished) return 'ignored';
       switch (action.type) {
         case 'answer': {
@@ -438,7 +439,7 @@ export function createFocusView({
           save(question);
           return 'ok';
         case 'followUp': {
-          const ask = typeof action.ask === 'string' ? action.ask.trim() : '';
+          const ask = typeof action.ask === 'string' ? action.ask.trim().slice(0, MAX_ASK_CHARS) : '';
           if (!feedback || !ask || followUp.pendingAsk !== null || !onFollowUp) return 'ignored';
           askFollowUp(ask);
           return 'ok';
@@ -450,6 +451,11 @@ export function createFocusView({
         case 'back':
           if (!finished || !onBack) return 'ignored';
           onBack();
+          return 'ok';
+        // Esc: hand the screen back to the agent, whatever is up.
+        case 'exit':
+          if (!onExit) return 'ignored';
+          onExit();
           return 'ok';
         case 'quiet':
           if (!onQuiet) return 'ignored';

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { claudeAgent } from '../src/agents/claude.js';
 import { agentNamed } from '../src/agents/index.js';
 import { runFocus } from '../src/app.js';
@@ -15,9 +16,10 @@ import { formatChecklist, formatNotes, readNotes } from '../src/notes.js';
 import { prepareDemo } from '../src/demo/prepare-demo.js';
 import { runPlain } from '../src/passthrough.js';
 import { runReview } from '../src/review.js';
+import { runStaged } from '../src/staged.js';
 import { ensureSpawnHelperIsExecutable } from '../src/spawn-helper-permissions.js';
 
-const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo, saved } = parseFocusArgs(process.argv.slice(2));
+const { agent: agentCommand, claudeArgs, auto, stats, notes, review, intro, quiet, here, md, brief, installHook: wantsHook, uninstallHook: wantsNoHook, doctor, demo, saved, staged } = parseFocusArgs(process.argv.slice(2));
 const { config, problems } = loadConfig();
 for (const problem of problems) process.stderr.write(`hyperfocus: config: ${problem}\n`);
 
@@ -119,6 +121,18 @@ async function main() {
     claudePath
       ? { path: claudePath, adapter: claudeAgent.writer, model: config.model }
       : { path: agentPath, adapter: agent.writer, model: config.model === DEFAULT_CONFIG.model ? agent.writer.defaultModel : config.model };
+
+  // `--staged`: questions about `git diff --cached` for the VS Code panel, no agent session.
+  if (staged) {
+    let diff;
+    try {
+      diff = execFileSync('git', ['diff', '--cached', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+    } catch {
+      process.stderr.write('hyperfocus: --staged needs a git repository (git diff --cached failed).\n');
+      process.exit(1);
+    }
+    process.exit(await runStaged({ cwd: process.cwd(), diff, config, writer }));
+  }
 
   if (process.stdin.isTTY && process.stdout.isTTY) {
     ensureSpawnHelperIsExecutable();

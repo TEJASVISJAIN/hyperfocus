@@ -1,6 +1,7 @@
-import { chmodSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { dataDir } from './data-dir.js';
 import { debugLog } from './debug-log.js';
 import { localEndpoint } from './local-endpoint.js';
@@ -17,9 +18,12 @@ import { redactSecrets } from './redact.js';
  * client → server:
  *   { type: 'answer', id, chosen } | { type: 'skip', id } | { type: 'next', id } | { type: 'save', id }
  *   { type: 'rate', id, rating: 'bad' } | { type: 'followUp', id, ask }
- *   { type: 'keepGoing' } | { type: 'back' } | { type: 'quiet' }
+ *   { type: 'keepGoing' } | { type: 'back' } | { type: 'exit' } (Esc: back to the agent) | { type: 'quiet' }
  */
 export const BRIDGE_PROTOCOL = 1;
+
+// A line longer than this is not a panel talking: the client is dropped rather than buffered forever.
+const MAX_LINE_CHARS = 64 * 1024;
 
 export const defaultSessionsDir = () => join(dataDir(), 'sessions');
 
@@ -38,9 +42,14 @@ let bridgeCount = 0;
  * }} options
  */
 export async function startBridge({ meta, state, act, sessionsDir = defaultSessionsDir(), platform = process.platform }) {
-  const endpoint = localEndpoint(`hyperfocus-bridge-${process.pid}-${bridgeCount++}`, platform);
-  endpoint.remove();
+  // On unix the socket goes in a fresh directory only this user can enter, so no one else can connect
+  // even in the moment between listening and tightening the socket's own permissions.
+  const privateDir = platform === 'win32' ? null : mkdtempSync(join(tmpdir(), 'hf-'));
+  const endpoint = privateDir
+    ? { path: join(privateDir, 'bridge.sock'), isPipe: false, remove: () => rmSync(privateDir, { recursive: true, force: true }) }
+    : localEndpoint(`hyperfocus-bridge-${process.pid}-${bridgeCount++}`, platform);
   const clients = new Set();
+  let connections = 0;
   let lastSent = '';
 
   const stateLine = () => JSON.stringify({ type: 'state', ...redactDeep(state()) }) + '\n';
@@ -50,6 +59,7 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
 
   const server = createServer((socket) => {
     clients.add(socket);
+    connections++;
     socket.setEncoding('utf8');
     socket.on('close', () => clients.delete(socket));
     socket.on('error', () => clients.delete(socket));
@@ -58,6 +68,10 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
     let buffered = '';
     socket.on('data', (chunk) => {
       buffered += chunk;
+      if (buffered.length > MAX_LINE_CHARS && !buffered.includes('\n')) {
+        debugLog('bridge client sent an over-long line; dropping it');
+        return socket.destroy();
+      }
       let newline;
       while ((newline = buffered.indexOf('\n')) >= 0) {
         const line = buffered.slice(0, newline);
@@ -118,7 +132,20 @@ export async function startBridge({ meta, state, act, sessionsDir = defaultSessi
   };
   process.once('exit', close);
 
-  return { socketPath: endpoint.path, sessionFile, publish, close };
+  return {
+    socketPath: endpoint.path,
+    sessionFile,
+    publish,
+    close,
+    /** Clients connected right now. */
+    get clientCount() {
+      return clients.size;
+    },
+    /** Clients that have ever connected. */
+    get connectionCount() {
+      return connections;
+    },
+  };
 }
 
 /**

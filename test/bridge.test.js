@@ -27,7 +27,7 @@ afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()));
 // A focus session the way the app builds one, with the callbacks recorded, and a bridge on it.
 async function setup({ quiet = false } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'hf-bridge-'));
-  const calls = { answers: [], saves: [], followUps: [], back: 0, keepGoing: 0, quiet: 0 };
+  const calls = { answers: [], saves: [], followUps: [], back: 0, keepGoing: 0, quiet: 0, exit: 0 };
   let session;
   const bridgeRef = {};
   session = createFocusSession({
@@ -37,6 +37,7 @@ async function setup({ quiet = false } = {}) {
     onSave: (entry) => (calls.saves.push(entry), true),
     onBack: () => calls.back++,
     onQuiet: () => calls.quiet++,
+    onExit: () => calls.exit++,
   });
   const bridge = await startBridge({
     sessionsDir: join(home, 'sessions'),
@@ -227,6 +228,50 @@ test('keep going and back act on the "agent finished" choice; quiet asks to go q
   assert.equal(goingOn.agent.finished, false);
 });
 
+test('exit hands back to the agent mid-question, like Esc', async () => {
+  const { session, bridge, calls } = await setup();
+  session.view.addQuestions([bugQuestion]);
+  const panel = await client(bridge.socketPath);
+  await panel.next(isState);
+  panel.send({ type: 'exit' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(calls.exit, 1);
+  assert.equal(calls.answers.length, 0, 'nothing answered');
+});
+
+test('a client sending an endless line is dropped, and the session carries on for others', async () => {
+  const { session, bridge } = await setup();
+  session.view.addQuestions([bugQuestion]);
+  const rogue = await client(bridge.socketPath);
+  const closed = new Promise((resolve) => rogue.socket.once('close', resolve));
+  rogue.socket.write('x'.repeat(200 * 1024));
+  await closed;
+  const panel = await client(bridge.socketPath);
+  const { question } = await panel.next(isState);
+  panel.send({ type: 'answer', id: question.id, chosen: 0 });
+  assert.equal((await panel.next((message) => isState(message) && message.feedback)).feedback.correct, true);
+});
+
+test('a follow-up from a client is cut to a sane length', async () => {
+  const { session, bridge } = await setup();
+  session.view.addQuestions([bugQuestion]);
+  const panel = await client(bridge.socketPath);
+  const { question } = await panel.next(isState);
+  panel.send({ type: 'answer', id: question.id, chosen: 1 });
+  await panel.next((message) => isState(message) && message.feedback);
+  panel.send({ type: 'followUp', id: question.id, ask: 'why '.repeat(1000) });
+  const state = await panel.next((message) => isState(message) && message.thread.length);
+  assert.ok(state.thread[0].ask.length <= 500);
+});
+
+test('the socket lives in a directory only this user can enter', async () => {
+  if (process.platform === 'win32') return;
+  const { statSync } = await import('node:fs');
+  const { dirname } = await import('node:path');
+  const { bridge } = await setup();
+  assert.equal(statSync(dirname(bridge.socketPath)).mode & 0o777, 0o700);
+});
+
 test('junk from a client is ignored and the session carries on', async () => {
   const { session, bridge } = await setup();
   session.view.addQuestions([bugQuestion]);
@@ -274,4 +319,12 @@ test('listSessions copes with a missing directory', () => {
   assert.deepEqual(listSessions(dir), []);
   mkdirSync(dir);
   assert.deepEqual(listSessions(dir), []);
+});
+
+test('on Windows the bridge would listen on a named pipe', async () => {
+  const { localEndpoint } = await import('../src/local-endpoint.js');
+  const pipe = localEndpoint('hyperfocus-bridge-1-0', 'win32');
+  assert.equal(pipe.path, '\\\\.\\pipe\\hyperfocus-bridge-1-0');
+  assert.equal(pipe.isPipe, true);
+  assert.match(localEndpoint('x', 'linux').path, /x\.sock$/);
 });

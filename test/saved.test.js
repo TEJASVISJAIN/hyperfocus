@@ -24,3 +24,10 @@ test('saved questions pile up in a notebook with the answer, the result, the cod
   assert.match(notebook, /✅ right/);
   assert.ok(notebook.indexOf('Why retry') < notebook.indexOf('Second one?'));
 });
+
+test('a saved question keeps where its code is, so the notebook can open it', () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'hf-saved-')), 'saved.jsonl');
+  const anchor = { file: 'src/auth.ts', anchors: ['await retry(refreshToken, 3)'] };
+  saveQuestion({ question: { ...question, anchor }, chosen: 1, correct: true }, { cwd: '/work/app', path });
+  assert.deepEqual(readSaved({ path })[0].anchor, anchor);
+});

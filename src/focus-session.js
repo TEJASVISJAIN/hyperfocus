@@ -108,6 +108,14 @@ export function createFocusSession({
       redraw();
     },
 
+    /** Records a whole run at once (a staged change), then asks for questions about all of it. */
+    replay(events) {
+      for (const event of events) log.record(event);
+      view.setFeed(log.run?.timeline ?? []);
+      askForMoreIfNeeded();
+      redraw();
+    },
+
     // The user stopped Claude: treat the run as over, since Claude Code sends no Stop hook for it.
     userInterrupted() {
       if (!log.run || log.run.finished) return;
