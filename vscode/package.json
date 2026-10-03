@@ -5,6 +5,15 @@
   "version": "1.0.0",
   "publisher": "ddalus",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TEJASVISJAIN/hyperfocus.git",
+    "directory": "vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/TEJASVISJAIN/hyperfocus/issues"
+  },
+  "homepage": "https://tejasvisjain.github.io/hyperfocus-web/",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -192,11 +201,6 @@
       }
     ]
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/TEJASVISJAIN/hyperfocus-web"
-  },
-  "homepage": "https://tejasvisjain.github.io/hyperfocus-web/",
   "icon": "media/icon.png",
   "keywords": [
     "ai",
@@ -213,9 +217,6 @@
   "galleryBanner": {
     "color": "#0A7C8C",
     "theme": "dark"
-  },
-  "bugs": {
-    "url": "https://github.com/TEJASVISJAIN/hyperfocus-web/issues"
   },
   "scripts": {
     "test": "node test.js && node --test live.test.js"

@@ -15,6 +15,14 @@
     "cli"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TEJASVISJAIN/hyperfocus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TEJASVISJAIN/hyperfocus/issues"
+  },
+  "homepage": "https://tejasvisjain.github.io/hyperfocus-web/",
   "author": "Tejasvi S Jain",
   "type": "module",
   "bin": {
