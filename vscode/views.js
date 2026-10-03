@@ -61,9 +61,16 @@ function historyHtml(data) {
   return `<section class="history"><h2>Your progress in ${escape(data.project ?? 'this project')}</h2>${parts.join('')}</section>`;
 }
 
-/** Everything below the live card: the intro when nothing runs, then your history. */
+/**
+ * Everything below the live card: the intro when nothing runs, then your history. While a session
+ * runs, the history is folded away so the question has the panel to itself.
+ */
 function dashboardHtml(data, { running = false, startLabel = 'Start hyperfocus' } = {}) {
-  return (running ? '' : introHtml({ startLabel })) + historyHtml(data);
+  if (!running) return introHtml({ startLabel }) + historyHtml(data);
+  const history = historyHtml(data);
+  if (!history) return '';
+  const summary = data.answered ? `Your progress · ${data.answered} answered, ${percent(data.last30.correct, data.last30.answered)} right` : 'Your progress';
+  return `<details class="folded"><summary>${escape(summary)}</summary>${history}</details>`;
 }
 
 const TONES = { busy: 'busy', waiting: 'waiting', finished: 'finished' };
@@ -72,7 +79,7 @@ const TONES = { busy: 'busy', waiting: 'waiting', finished: 'finished' };
 function liveHtml(model) {
   const c = model.controls ?? {};
   const q = model.question;
-  const status = `<div class="live-status ${TONES[model.status.tone] ?? ''}"><span class="dot"></span><span>${escape(model.status.text)}</span>${model.quiet ? '<span class="muted"> · quiet</span>' : ''}</div>`;
+  const status = `<div class="live-status ${TONES[model.status.tone] ?? ''}" title="${escape(model.status.full ?? model.status.text)}"><span class="dot"></span><span class="status-text">${escape(model.status.text)}</span>${model.quiet ? '<span class="muted"> · quiet</span>' : ''}</div>`;
   const button = (type, label, cls = '') => `<button class="${cls}" data-act="${type}">${escape(label)}</button>`;
   const link = (type, label) => `<a href="#" data-act="${type}">${escape(label)}</a>`;
 
@@ -106,8 +113,15 @@ function liveHtml(model) {
       actions = `<p class="links">${c.skip ? link('skip', 'Skip') : ''}${c.skip && c.rate ? ' · ' : ''}${c.rate ? link('rate', 'Not a good question') : ''}</p>`;
     }
     const kind = KIND_NAMES[q.kind] ?? '';
+    const where = q.source?.file
+      ? `<a href="#" data-open="question" title="Open in the editor">${escape(q.source.file)}${q.source.lines ? escape(`:${q.source.lines.start + 1}${q.source.lines.end > q.source.lines.start ? '–' + (q.source.lines.end + 1) : ''}`) : ''}</a>`
+      : q.source?.plan
+        ? `About the plan for “${escape(q.source.plan)}”`
+        : '';
+    const topics = q.topics?.length ? `<span class="topics">${q.topics.map((t) => `<span class="topic">${escape(t)}</span>`).join('')}</span>` : '';
     body = `<div class="live-card" data-id="${q.id}">
-      <div class="meta">${[kind, q.file ? `<a href="#" data-open="question" title="Open in the editor">${escape(q.file)}</a>` : ''].filter(Boolean).join(' · ')}</div>
+      <div class="kind">${escape(kind)}${topics}</div>
+      ${where ? `<div class="source">${where}</div>` : ''}
       <p class="live-q">${escape(q.q)}</p>
       ${q.code ? `<pre data-open="question" title="Click to open in the editor">${escape(q.code)}</pre>` : ''}
       <ol class="live-options">${q.options.map(option).join('')}</ol>
@@ -166,7 +180,14 @@ const STYLES = `
   .pill.good { background: var(--vscode-testing-iconPassed, #3a3); color: #fff; }
   .pill.bad { background: var(--vscode-testing-iconFailed, #c33); color: #fff; }
   .pill.muted { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); opacity: 1; }
-  .live-status { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0 10px; }
+  .live-status { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0 10px; min-width: 0; }
+  .status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .kind { font-size: 11px; opacity: .75; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .topic { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); margin-left: 4px; }
+  .source { font-size: 11px; margin: 3px 0 0; opacity: .85; overflow-wrap: anywhere; }
+  .folded { margin-top: 18px; }
+  .folded > summary { cursor: pointer; font-size: 11px; opacity: .7; }
+  .folded .history h2 { display: none; }
   .live-status .dot { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--vscode-descriptionForeground); }
   .live-status.busy .dot { background: var(--vscode-testing-iconPassed, #3a3); animation: pulse 1.4s ease-in-out infinite; }
   .live-status.waiting .dot { background: var(--vscode-editorWarning-foreground, #c90); }

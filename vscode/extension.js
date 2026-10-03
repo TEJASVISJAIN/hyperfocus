@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const { execFile, spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
-const { existsSync, mkdirSync, watch, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, watch, writeFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
 const { dataDir, readJsonLines, summarize } = require('./data');
 const { render, dashboardHtml, liveSection } = require('./views');
@@ -31,8 +31,24 @@ class Panel {
 
   liveHtml() {
     const snapshot = this.live.snapshot();
-    const model = snapshot.state ? liveModel(snapshot.state, { agent: snapshot.session?.agent }) : null;
+    const model = snapshot.state ? liveModel(snapshot.state, { agent: snapshot.session?.agent, lines: this.linesFor(snapshot) }) : null;
     return liveSection(snapshot, model);
+  }
+
+  // Where the current question's code is in its file now, worked out once per question.
+  linesFor({ session, state }) {
+    const question = state?.question;
+    if (!question?.anchor || !session) return null;
+    if (this.lines?.id === question.id && this.lines.pid === session.pid) return this.lines.range;
+    let range = null;
+    const path = resolveInside(session.cwd, question.anchor.file);
+    try {
+      if (path) range = anchorRange(question.anchor, readFileSync(path, 'utf8'));
+    } catch {
+      // The file is gone or unreadable: the card names the file without lines.
+    }
+    this.lines = { id: question.id, pid: session.pid, range };
+    return range;
   }
 
   dashboard() {

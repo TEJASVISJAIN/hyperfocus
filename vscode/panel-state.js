@@ -65,6 +65,12 @@ function protocolProblem(protocol) {
   return `Update hyperfocus to ${MIN_CLI} or later to follow it here live: npm i -g @ddalus/hyperfocus`;
 }
 
+const MAX_PROMPT_CHARS = 80;
+const shortPrompt = (prompt) => {
+  const line = String(prompt ?? '').split('\n')[0].trim();
+  return line.length > MAX_PROMPT_CHARS ? line.slice(0, MAX_PROMPT_CHARS - 1).trimEnd() + '…' : line;
+};
+
 const isFinished = (state) => Boolean(state?.agent && (state.agent.finished || state.agent.activity === 'done'));
 
 /**
@@ -88,8 +94,18 @@ function controlsFor(state) {
   };
 }
 
-/** Bridge state → what the live card shows. `agent` is the session's agent id. */
-function liveModel(state, { agent: agentId = 'claude' } = {}) {
+// "running cd /a/very/long/path && grep …" → "running cd /a/very/long…": one readable line.
+const MAX_ACTIVITY_CHARS = 60;
+const shortActivity = (activity) => {
+  const line = String(activity ?? '').split('\n')[0].replace(/\s+/g, ' ');
+  return line.length > MAX_ACTIVITY_CHARS ? line.slice(0, MAX_ACTIVITY_CHARS - 1).trimEnd() + '…' : line;
+};
+
+/**
+ * Bridge state → what the live card shows. `agent` is the session's agent id; `lines` is where the
+ * question's code is in its file now (from anchorRange), when the extension could find it.
+ */
+function liveModel(state, { agent: agentId = 'claude', lines = null } = {}) {
   const { agent, question, feedback } = state;
   const name = agentName(agentId);
   const staged = agentId === 'staged';
@@ -98,8 +114,8 @@ function liveModel(state, { agent: agentId = 'claude' } = {}) {
     : isFinished(state)
       ? { text: `${name} finished`, tone: 'finished' }
       : agent.busy
-        ? { text: `${name} is ${agent.activity}`, tone: 'busy' }
-        : { text: `${name} is ${agent.activity || 'idle'}`, tone: 'waiting' };
+        ? { text: `${name} is ${shortActivity(agent.activity)}`, tone: 'busy', full: `${name} is ${agent.activity}` }
+        : { text: `${name} is ${shortActivity(agent.activity) || 'idle'}`, tone: 'waiting' };
   const mark = (index) => {
     if (!feedback || feedback.answer === null || feedback.answer === undefined) return feedback?.chosen === index ? 'chosen' : '';
     if (index === feedback.answer) return 'answer';
@@ -117,6 +133,11 @@ function liveModel(state, { agent: agentId = 'claude' } = {}) {
           q: question.q,
           code: question.code ?? '',
           file: question.file ?? question.anchor?.file ?? '',
+          // Where the question comes from: lines of a file, or (before any edit) the agent's plan.
+          source: (question.file ?? question.anchor?.file)
+            ? { file: question.file ?? question.anchor.file, lines }
+            : { plan: shortPrompt(state.run?.prompt) },
+          topics: question.tags ?? [],
           options: question.options.map((text, index) => ({ key: String(index + 1), text, mark: mark(index) })),
         }
       : null,

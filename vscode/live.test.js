@@ -296,7 +296,7 @@ test('the live card: options while asking, then the result with Next and Save, t
   assert.match(finished, /data-act="back"[^>]*>Done/);
   assert.match(html(state, { agent: 'staged' }), />End review</, 'a staged review can be ended any time');
   assert.match(asking, /data-open="question"/, 'the file opens the code');
-  assert.match(asking, /Spot the bug · <a/, 'the kind of question is named');
+  assert.match(asking, /class="kind">Spot the bug/, 'the kind of question is named');
   assert.match(html({ ...state, question: null }), /on its way/);
 });
 
@@ -354,4 +354,29 @@ test('the connection tells the session whether the panel is on screen, again aft
   } finally {
     live.dispose();
   }
+});
+
+test('a long command reads as one short line, with the whole thing kept for the tooltip', () => {
+  const command = 'running cd /Users/me/Desktop/Tasket_final/tasket-web && grep -rlE "export (function|const) use[A-Z]" src packages | sort -u';
+  const model = liveModel({ ...state, agent: { activity: command, busy: true, finished: false } });
+  assert.ok(model.status.text.length <= 'Claude is '.length + 60);
+  assert.match(model.status.text, /…$/);
+  assert.equal(model.status.full, 'Claude is ' + command);
+  assert.match(liveHtml(model), /title="Claude is running cd/);
+});
+
+test('every question says where it comes from: file and lines, or the plan, and its topics', () => {
+  const fromCode = liveHtml(liveModel({ ...state, question: { ...state.question, tags: ['retries', 'async'] } }, { lines: { start: 39, end: 41 } }));
+  assert.match(fromCode, /data-open="question"[^>]*>src\/retry\.js:40–42</);
+  assert.match(fromCode, /<span class="topic">retries<\/span><span class="topic">async<\/span>/);
+  assert.match(liveHtml(liveModel(state)), />src\/retry\.js</, 'without known lines, just the file');
+  const fromPlan = liveHtml(liveModel({ ...state, run: { ...state.run, prompt: 'inventory every custom hook in the monorepo and list where each one is used' }, question: { ...state.question, file: undefined, code: undefined } }));
+  assert.match(fromPlan, /About the plan for “inventory every custom hook in the monorepo and list where each one is used”/);
+});
+
+test('while a session runs, your progress folds away under the question', () => {
+  const { dashboardHtml } = require('./views');
+  const some = { answered: 3, correct: 1, last30: { answered: 3, correct: 1 }, streak: 1, weakSpots: [], missed: [], saved: [{ question: 'Kept?', options: ['a'], answer: 0, chosen: 0, correct: true }] };
+  assert.match(dashboardHtml(some, { running: true }), /^<details class="folded"><summary>Your progress · 3 answered, 33% right<\/summary>/);
+  assert.doesNotMatch(dashboardHtml(some, { running: false }), /class="folded"/, 'unfolded when nothing runs');
 });
