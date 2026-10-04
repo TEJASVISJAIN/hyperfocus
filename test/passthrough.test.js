@@ -5,7 +5,7 @@ import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
 import { listSessions } from '../src/bridge.js';
@@ -19,6 +19,13 @@ ensureSpawnHelperIsExecutable();
 
 // Runs `focus` inside an outer pseudo-terminal, standing in for the user's real terminal.
 // The intro is marked as seen, so tests reach the quiz straight away; `firstRun` shows it.
+// A test that fails midway leaves its hyperfocus running, which would keep this file from ever
+// finishing; whatever is still running when the file's tests are done is stopped here.
+const running = new Set();
+after(() => {
+  for (const terminal of running) terminal.kill();
+});
+
 function startFocus(args = [], { cols = 80, rows = 24, env = {}, firstRun = false, home = mkdtempSync(join(tmpdir(), 'focus-home-')) } = {}) {
   if (!firstRun) writeFileSync(join(home, 'state.json'), JSON.stringify({ introSeenAt: '2026-01-01T00:00:00.000Z' }));
   const terminal = pty.spawn(process.execPath, [focusBin, ...args], {
@@ -43,7 +50,11 @@ function startFocus(args = [], { cols = 80, rows = 24, env = {}, firstRun = fals
     for (const waiter of [...waiters]) waiter();
   });
 
-  const exited = new Promise((resolve) => terminal.onExit(resolve));
+  running.add(terminal);
+  const exited = new Promise((resolve) => terminal.onExit((result) => {
+    running.delete(terminal);
+    resolve(result);
+  }));
 
   const nextReport = (event) =>
     new Promise((resolve, reject) => {
