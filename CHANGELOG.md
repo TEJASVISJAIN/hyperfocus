@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **You can always tell hyperfocus is running.** Claude Code's status line, under its input box, now
+  reads `◐ hyperfocus · Ctrl-] for the quiz`, and counts questions as they become ready
+  (`2 questions ready · Ctrl-] to answer`) and your score this session. If you have your own status
+  line, it stays: hyperfocus's line goes under it.
+
 ## 1.0.0
 
 **Questions on time.**
