@@ -1,3 +1,6 @@
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { claudeAgent } from './agents/claude.js';
 import { alertUser } from './alert.js';
 import { startBridge } from './bridge.js';
@@ -14,6 +17,7 @@ import { buildRecap, reviewChecklist } from './recap.js';
 import { createScreen, peekLines } from './screen.js';
 import { saveQuestion } from './saved.js';
 import { readState, updateState } from './state.js';
+import { statusFromSnapshot, userStatusLine, writeStatus } from './status-line.js';
 
 const TYPING_GRACE_MS = 2000;
 const CLOCK_TICK_MS = 1000;
@@ -38,8 +42,14 @@ export async function runFocus(agentPath, agentArgs, options) {
   const { stdout } = process;
   const eventServer = await startEventServer({ toEvent: agent.toEvent });
   const write = (data) => stdout.write(data);
-  const launch = agent.prepareLaunch({ socketPath: eventServer.socketPath, env: process.env });
-  process.on('exit', () => launch.cleanup());
+  // Read by the status line under Claude's input box, so it's always clear hyperfocus is running.
+  const statusFile = join(tmpdir(), `hyperfocus-status-${process.pid}.json`);
+  writeStatus(statusFile, { ready: 0, answered: 0, correct: 0, quiet: Boolean(config.quiet) });
+  const launch = agent.prepareLaunch({ socketPath: eventServer.socketPath, env: process.env, statusFile, userStatusLine: userStatusLine() });
+  process.on('exit', () => {
+    launch.cleanup();
+    rmSync(statusFile, { force: true });
+  });
 
   const child = startClaudeInPty(agentPath, [...launch.args, ...agentArgs], {
     env: { ...process.env, ...launch.env },
@@ -66,9 +76,21 @@ export async function runFocus(agentPath, agentArgs, options) {
   /** @type {Awaited<ReturnType<typeof startBridge>> | null} */
   let bridge = null;
   const panelFollowing = () => (bridge?.watcherCount ?? 0) > 0;
-  // The terminal and any connected panel both show the session, so both hear about every change.
+  let lastStatus = '';
+  const publishStatus = () => {
+    const status = statusFromSnapshot({ ...session.snapshot(), quiet });
+    if (JSON.stringify(status) === lastStatus) return;
+    lastStatus = JSON.stringify(status);
+    try {
+      writeStatus(statusFile, status);
+    } catch (error) {
+      debugLog('could not write the status line', error.message);
+    }
+  };
+  // The terminal, the status line and any connected panel all show the session, so all hear about every change.
   const redraw = () => {
     screen.redrawFocus();
+    publishStatus();
     bridge?.publish();
   };
   const session = createFocusSession({
@@ -104,6 +126,7 @@ export async function runFocus(agentPath, agentArgs, options) {
     session.view.hideRecap();
     session.view.hideFinished();
     screen.showClaude();
+    publishStatus();
     bridge?.publish();
   };
 

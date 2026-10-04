@@ -1,6 +1,7 @@
 import { resolveClaudeBinary } from '../claude-binary.js';
 import { toFocusEvent } from '../hook-events.js';
 import { buildHookSettings } from '../hook-settings.js';
+import { statusLineSettings } from '../status-line.js';
 
 /**
  * Everything hyperfocus knows about one coding agent, so the rest of it can wrap any of them:
@@ -25,7 +26,7 @@ import { buildHookSettings } from '../hook-settings.js';
  *   name: string,
  *   findBinary: (env?: NodeJS.ProcessEnv) => string | null,
  *   missingHelp: string,
- *   prepareLaunch: (options: { socketPath: string, env?: NodeJS.ProcessEnv, home?: string }) => { args: string[], env: NodeJS.ProcessEnv, cleanup: () => void },
+ *   prepareLaunch: (options: { socketPath: string, env?: NodeJS.ProcessEnv, home?: string, statusFile?: string, userStatusLine?: string | null }) => { args: string[], env: NodeJS.ProcessEnv, cleanup: () => void },
  *   toEvent: (payload: any) => import('../hook-events.js').FocusEvent | import('../hook-events.js').FocusEvent[] | null,
  *   writer: QuestionWriter,
  * }} AgentAdapter
@@ -38,9 +39,14 @@ export const claudeAgent = {
   findBinary: (env = process.env) => resolveClaudeBinary(env),
   missingHelp: 'Install Claude Code (https://claude.com/claude-code) or set HYPERFOCUS_CLAUDE_BIN to its path.',
   // Claude Code merges hooks passed with --settings into the user's own: nothing on disk changes.
-  prepareLaunch: ({ socketPath }) => ({
-    args: ['--settings', JSON.stringify(buildHookSettings())],
-    env: { HYPERFOCUS_SOCK: socketPath },
+  // The status line under its input box shows hyperfocus is running; the user's own line stays above it.
+  prepareLaunch: ({ socketPath, statusFile, userStatusLine }) => ({
+    args: ['--settings', JSON.stringify({ ...buildHookSettings(), ...(statusFile ? statusLineSettings() : {}) })],
+    env: {
+      HYPERFOCUS_SOCK: socketPath,
+      ...(statusFile ? { HYPERFOCUS_STATUS: statusFile } : {}),
+      ...(userStatusLine ? { HYPERFOCUS_USER_STATUSLINE: userStatusLine } : {}),
+    },
     cleanup: () => {},
   }),
   toEvent: toFocusEvent,

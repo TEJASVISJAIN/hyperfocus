@@ -37,6 +37,10 @@ session and for the small model calls that write the questions, so it uses whate
 already has: a Claude subscription, an API key, `apiKeyHelper`, or Bedrock/Vertex. The question calls
 count toward your own usage, at about $0.004 per batch.
 
+While hyperfocus is running, Claude Code's status line (under its input box) says so:
+`◐ hyperfocus · Ctrl-] for the quiz`, or `2 questions ready · Ctrl-] to answer` once questions are
+waiting. Your own status line, if you have one, stays above it.
+
 Every argument is passed through to `claude`: `hyperfocus --continue`, `hyperfocus --model sonnet`,
 and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus steps aside and runs
 `claude` directly.
