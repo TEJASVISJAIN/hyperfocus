@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@ddalus/hyperfocus?color=0a7c8c)](https://www.npmjs.com/package/@ddalus/hyperfocus)
 [![VS Code](https://img.shields.io/visual-studio-marketplace/v/ddalus.hyperfocus?label=VS%20Code&color=0a7c8c)](https://marketplace.visualstudio.com/items?itemName=ddalus.hyperfocus)
+[![Open VSX](https://img.shields.io/open-vsx/v/ddalus/hyperfocus?label=Open%20VSX&color=0a7c8c)](https://open-vsx.org/extension/ddalus/hyperfocus)
 [![CI](https://github.com/TEJASVISJAIN/hyperfocus/actions/workflows/ci.yml/badge.svg)](https://github.com/TEJASVISJAIN/hyperfocus/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-0a7c8c)](LICENSE)
 
@@ -52,7 +53,8 @@ and so on. When input or output is piped (`echo hi | hyperfocus -p`), hyperfocus
 | macOS, Linux | supported, tested in CI on every change |
 | Claude Code | supported |
 | VS Code | supported ([extension](#vs-code)) |
-| Cursor, Windsurf and other Open VSX editors | experimental: the same extension, from Open VSX |
+| Cursor | supported: the same extension, from Open VSX |
+| Kiro, Windsurf, VSCodium and other Open VSX editors | experimental: the same extension, from Open VSX |
 | Windows | experimental: see below |
 | Codex CLI, Gemini CLI | experimental: see [Other agents](#other-agents-experimental) |
 | Local question writer (Ollama) | supported, see [Keep code on your machine](#keep-code-on-your-machine) |
@@ -272,6 +274,10 @@ The [hyperfocus extension](https://marketplace.visualstudio.com/items?itemName=d
 code --install-extension ddalus.hyperfocus
 ```
 
+In **Cursor, Kiro, Windsurf, VSCodium** and other editors built on VS Code, search for "hyperfocus"
+in Extensions: it comes from [Open VSX](https://open-vsx.org/extension/ddalus/hyperfocus). Tested in Cursor;
+the others use the same extension and should work the same.
+
 - **Answer in the sidebar.** While hyperfocus runs in the window's folder (in VS Code's terminal or
   any other), the panel shows what the agent is doing and the current question. Click an option or
   press `1`–`9`; ask a follow-up, save it, or rate it bad, just like the keys in the terminal. Both
@@ -286,9 +292,6 @@ code --install-extension ddalus.hyperfocus
 The extension follows a session through `~/.hyperfocus/sessions/` and a local socket only your user
 can open; it never calls a model itself. The live view needs hyperfocus 0.7.0 or later; lessons,
 repeats and plan sources need 1.0.0.
-
-In Cursor, Windsurf and other editors that use Open VSX, install `ddalus.hyperfocus` from there
-(experimental).
 
 ## How it works
 
