@@ -130,11 +130,16 @@ test('forwards keystrokes and propagates the exit code', async () => {
 test('propagates terminal resizes to claude', async () => {
   const focus = startFocus();
   await focus.nextReport('start');
-  focus.terminal.resize(120, 40);
-  const resize = await focus.nextReport('resize');
-  assert.deepEqual([resize.cols, resize.rows], [120, 40]);
-  focus.terminal.write('exit 0\r');
-  await focus.exited;
+  try {
+    focus.terminal.resize(120, 40);
+    const resize = await focus.nextReport('resize');
+    assert.deepEqual([resize.cols, resize.rows], [120, 40]);
+  } finally {
+    // Let the nested agent and wrapper exit normally even when the resize
+    // assertion fails. Killing the outer terminal alone can leave pipes open.
+    focus.terminal.write('exit 0\r');
+    await focus.exited;
+  }
 });
 
 function runFocusWithoutTerminal(env) {
