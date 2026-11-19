@@ -37,7 +37,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node scripts/run-tests.js",
     "typecheck": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run typecheck && npm test"
   },
